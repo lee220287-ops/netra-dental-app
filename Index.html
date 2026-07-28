@@ -698,6 +698,38 @@ async function analyzeCandidate(id){
     c.error = '応答データを解析できませんでした。もう一度お試しください。';
   }
   render();
+  if(c.status === 'done'){
+    checkDuplicateForCandidate(c.id);
+  }
+}
+
+// 스프레드시트에 이미 등록되어 있는 치과와 한 항목(電話番号／FAX／住所／免許番号／医療機関コード／医院名・氏名)이라도
+// 일치하면 중복 거래처로 의심된다고 표시합니다.
+async function checkDuplicateForCandidate(id){
+  const c = candidates.find(x=>x.id===id);
+  if(!c || !c.result) return;
+  const f = computeCandidateFields(c);
+  c.duplicateChecking = true;
+  render();
+  try{
+    const resp = await gsRun('checkDuplicateClinic', {
+      doctor: f.doctorField,
+      tel: f.telField,
+      fax: f.faxField,
+      address: f.addressField,
+      license: f.licenseField,
+      code: f.codeField
+    });
+    if(resp && resp.ok){
+      c.duplicateCheck = resp;
+    } else {
+      c.duplicateCheck = { ok:false, error: (resp && resp.error) || '不明なエラー' };
+    }
+  }catch(e){
+    c.duplicateCheck = { ok:false, error: e.message };
+  }
+  c.duplicateChecking = false;
+  render();
 }
 
 function statusStampClass(status){
@@ -974,12 +1006,29 @@ function resultHTML(cand){
     websiteCheckHTML = `<div class="${wvCls}">${wvIcon} 実際のウェブサイト照合: ${wv.result || '確認不可'}（${wv['確認したURL'] || '-'}）${wv.detail ? '・' + wv.detail : ''}</div>`;
   }
 
+  const dupFieldLabels = { doctor:'医院名・氏名', tel:'電話番号', fax:'FAX番号', address:'住所', license:'免許番号', code:'医療機関コード' };
+  let duplicateCheckHTML = '';
+  if(cand.duplicateChecking){
+    duplicateCheckHTML = `<div class="doc-ok" style="color:var(--ink-soft);background:#F0F1EE;">⏳ 重複取引先を確認中…</div>`;
+  } else if(cand.duplicateCheck){
+    if(cand.duplicateCheck.ok === false){
+      duplicateCheckHTML = `<div class="type-mismatch">⚠ 重複確認中にエラーが発生しました: ${cand.duplicateCheck.error || ''}（<a href="#" onclick="checkDuplicateForCandidate('${cand.id}');return false;">再確認</a>）</div>`;
+    } else if(cand.duplicateCheck.isDuplicate){
+      const labels = (cand.duplicateCheck.matchedFields || []).map(k => dupFieldLabels[k] || k).join('・');
+      const clinicName = cand.duplicateCheck.matchedClinic ? `（既存登録: ${cand.duplicateCheck.matchedClinic}）` : '';
+      duplicateCheckHTML = `<div class="doc-warning">🚩 重複取引先の疑いがあります。一致項目: ${labels}${clinicName}<br>登録前に既存の取引先ではないか必ずご確認ください。</div>`;
+    } else {
+      duplicateCheckHTML = `<div class="doc-ok">✓ スプレッドシート上に一致する既存取引先は見つかりませんでした</div>`;
+    }
+  }
+
   return `
     <div class="result">
       <div class="result-head">
         <span class="stamp ${stampCls}"><span class="dot"></span>${r.overall_status || '-'}</span>
         <span class="rate-pill">提出書類 ${r.doc_count_submitted ?? '-'}件 ・ 一致率 ${r.match_rate ?? '-'}%</span>
       </div>
+      ${duplicateCheckHTML}
       ${docCheckHTML}
       ${websiteCheckHTML}
       ${r.registration_type_note ? `<div class="type-mismatch">${r.registration_type_note}</div>` : ''}
@@ -1043,23 +1092,33 @@ function selectedFieldValue(c, label, fallback){
   return fallback || '';
 }
 
+// 내보내기(스프레드시트 반영/엑셀 다운로드)와 중복 거래처 확인에서 공통으로 쓰는
+// 필드 계산 로직입니다. 화면에 표시되는 값(사용자가 직접 선택/수정한 값 포함)과
+// 항상 동일한 값을 기준으로 판단하도록 하나로 통일했습니다.
+function computeCandidateFields(c){
+  const ne = c.result.netra_export || {};
+  const d = c.result.documents || {};
+  const isBiz = c.regType === 'biz';
+  const doctorFallback = isBiz
+    ? (ne.doctor || d.homepage?.医院名 || d.opening_cert?.医院名 || c.name)
+    : (ne.person_name || d.license?.氏名 || c.name);
+  const doctorField = isBiz
+    ? selectedFieldValue(c, '医院名', doctorFallback)
+    : selectedFieldValue(c, '氏名', doctorFallback);
+  const telField = selectedFieldValue(c, '電話番号', ne.tel_no || '');
+  const faxField = selectedFieldValue(c, 'FAX番号', ne.fax_no || '');
+  const addressField = selectedFieldValue(c, '住所', ne.bill_to || d.homepage?.住所 || d.opening_cert?.住所 || '');
+  const licenseField = selectedFieldValue(c, '免許番号', ne.license_no || d.license?.免許番号 || '');
+  const codeField = selectedFieldValue(c, '医療機関コード', institutionCodeDisplay(c.result));
+  const emailField = c.includeEmail ? (d.business_card?.メールアドレス || ne.email || '') : '';
+  return { isBiz, doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d };
+}
+
 function buildExportRows(){
-  return candidates.filter(c=>c.status==='done' && c.result && (c.result.match_rate ?? 0) >= 80).map(c=>{
-    const ne = c.result.netra_export || {};
-    const d = c.result.documents || {};
-    const isBiz = c.regType === 'biz';
-    const doctorFallback = isBiz
-      ? (ne.doctor || d.homepage?.医院名 || d.opening_cert?.医院名 || c.name)
-      : (ne.person_name || d.license?.氏名 || c.name);
-    const doctorField = isBiz
-      ? selectedFieldValue(c, '医院名', doctorFallback)
-      : selectedFieldValue(c, '氏名', doctorFallback);
-    const telField = selectedFieldValue(c, '電話番号', ne.tel_no || '');
-    const faxField = selectedFieldValue(c, 'FAX番号', ne.fax_no || '');
-    const addressField = selectedFieldValue(c, '住所', ne.bill_to || d.homepage?.住所 || d.opening_cert?.住所 || '');
-    const licenseField = selectedFieldValue(c, '免許番号', ne.license_no || d.license?.免許番号 || '');
-    const codeField = selectedFieldValue(c, '医療機関コード', institutionCodeDisplay(c.result));
-    const emailField = c.includeEmail ? (d.business_card?.メールアドレス || ne.email || '') : '';
+  const eligible = candidates.filter(c=>c.status==='done' && c.result && (c.result.match_rate ?? 0) >= 80);
+  const rows = eligible.map(c=>{
+    const f = computeCandidateFields(c);
+    const { isBiz, doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d } = f;
     return {
       '登録種別': isBiz ? (c.preOpen ? '歯科（事業者）-開院前' : '歯科（事業者）') : '個人（勤務者）',
       'CODE': codeField,
@@ -1087,10 +1146,11 @@ function buildExportRows(){
       '判定備考': c.result.overall_note || ''
     };
   });
+  return { rows, ids: eligible.map(c=>c.id) };
 }
 
 function exportExcel(){
-  const rows = buildExportRows();
+  const { rows } = buildExportRows();
   if(rows.length===0){ alert('出力できる分析結果がありません。'); return; }
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -1099,7 +1159,7 @@ function exportExcel(){
 }
 
 function exportToSheet(){
-  const rows = buildExportRows();
+  const { rows, ids } = buildExportRows();
   if(rows.length===0){ alert('出力できる分析結果がありません。'); return; }
   const btn = document.getElementById('sheetBtn');
   btn.disabled = true;
@@ -1111,6 +1171,10 @@ function exportToSheet(){
       btn.textContent = originalText;
       if(resp && resp.ok){
         alert(`${resp.added}件のデータをスプレッドシートに反映しました。`);
+        // 등록이 성공적으로 반영된 항목은 화면에서 제거합니다.
+        // (다음에 新規登録要請을 다시 눌러도 같은 치과가 중복으로 반영되지 않도록)
+        candidates = candidates.filter(c => !ids.includes(c.id));
+        render();
       } else {
         alert('スプレッドシートへの反映に失敗しました: ' + (resp ? resp.error : '不明なエラー'));
       }
