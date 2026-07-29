@@ -66,6 +66,7 @@ input[type=file]{display:none;}
 }
 .notice{font-size:12.5px;color:var(--ink-soft);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:18px;line-height:1.6;}
 .error-box{background:var(--red-soft);color:var(--red);padding:14px;border-radius:8px;font-size:14px;}
+.notice-box{background:var(--teal-soft);color:var(--teal);padding:20px;border-radius:10px;font-size:14px;line-height:1.7;text-align:center;}
 .success-box{background:var(--green-soft);color:var(--green);padding:20px;border-radius:10px;font-size:15px;text-align:center;font-weight:600;}
 .loading{color:var(--ink-soft);font-size:14px;padding:20px 0;}
 </style>
@@ -241,6 +242,10 @@ function showError(msg){
   document.getElementById('app').innerHTML = `<div class="error-box">${msg}</div>`;
 }
 
+function showNotice(msg){
+  document.getElementById('app').innerHTML = `<div class="notice-box">ℹ️ ${msg}</div>`;
+}
+
 (function(){
   const params = new URLSearchParams(window.location.search);
   caseId = params.get('caseId') || '';
@@ -251,6 +256,10 @@ function showError(msg){
   gsRun('getCaseInfo', caseId)
     .then(function(resp){
       if(!resp || !resp.ok){
+        if(resp && resp.deleted){
+          showNotice(resp.error);
+          return;
+        }
         showError((resp && resp.error) || 'ケース情報を取得できませんでした。');
         return;
       }
