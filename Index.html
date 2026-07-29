@@ -7,7 +7,1310 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
+@import url('https:/<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>書類検証</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+:root{
+  --bg: #F4F5F1;
+  --panel: #FFFFFF;
+  --ink: #17211E;
+  --ink-soft: #5B655F;
+  --line: #DBE0D8;
+  --teal: #0F4C46;
+  --teal-soft: #E4EFEC;
+  --violet: #5B4B8A;
+  --violet-soft: #ECE8F5;
+  --amber: #B8791A;
+  --amber-soft: #FBF0DD;
+  --red: #A5382C;
+  --red-soft: #FAE7E3;
+  --green: #2C7A4B;
+  --green-soft: #E4F2E7;
+  --radius: 10px;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Noto Sans JP',sans-serif;
+  padding:32px 20px 100px;
+}
+.wrap{max-width:1040px;margin:0 auto;}
+header{margin-bottom:28px;}
+.eyebrow{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;
+  letter-spacing:.12em;
+  color:var(--teal);
+  text-transform:uppercase;
+  margin-bottom:8px;
+  display:block;
+}
+h1{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:30px;
+  font-weight:700;
+  margin:0 0 10px;
+  letter-spacing:-.01em;
+}
+.sub{color:var(--ink-soft);font-size:14.5px;line-height:1.6;max-width:680px;}
+.disclaimer{
+  margin-top:16px;
+  background:var(--amber-soft);
+  border:1px solid #E8CE9C;
+  color:#7A5111;
+  font-size:13px;
+  padding:10px 14px;
+  border-radius:8px;
+  line-height:1.55;
+}
+.rules-box{
+  margin-top:12px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:14px 16px;
+  font-size:12.5px;
+  color:var(--ink-soft);
+  line-height:1.75;
+}
+.rules-box b{color:var(--ink);}
+.add-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--teal);color:#fff;border:none;
+  padding:11px 18px;border-radius:8px;font-size:14px;font-weight:600;
+  cursor:pointer;font-family:'Noto Sans JP',sans-serif;margin:20px 0 22px;
+}
+.add-btn:hover{background:#0B3B36;}
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:22px 24px 24px;
+  margin-bottom:20px;
+  position:relative;
+}
+.card-top{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+.name-input{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:18px;font-weight:600;
+  border:none;border-bottom:2px solid var(--line);
+  padding:4px 2px 6px;flex:1;min-width:160px;background:transparent;color:var(--ink);
+}
+.name-input:focus{outline:none;border-bottom-color:var(--teal);}
+.memo-input{
+  font-family:'Noto Sans JP',sans-serif;
+  font-size:12.5px;color:var(--ink-soft);
+  border:1px solid var(--line);border-radius:6px;
+  padding:6px 10px;width:100%;margin-bottom:14px;background:#FAFBF9;
+}
+.memo-input:focus{outline:none;border-color:var(--teal);background:#fff;}
+.memo-input::placeholder{color:#A6ADA3;}
+.remove-btn{
+  background:none;border:none;color:var(--ink-soft);cursor:pointer;
+  font-size:13px;padding:4px 8px;border-radius:6px;
+}
+.remove-btn:hover{background:var(--red-soft);color:var(--red);}
+.type-row{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+.type-toggle{display:flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;}
+.type-toggle button{
+  border:none;background:#fff;padding:8px 14px;font-size:13px;font-weight:600;
+  cursor:pointer;color:var(--ink-soft);font-family:'Noto Sans JP',sans-serif;
+}
+.type-toggle button.active.biz{background:var(--teal);color:#fff;}
+.type-toggle button.active.indiv{background:var(--violet);color:#fff;}
+.pre-open-chk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);}
+.pre-open-chk input{accent-color:var(--teal);}
+.doc-grid{
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px;
+}
+.doc-slot{
+  border:1.5px dashed var(--line);
+  border-radius:8px;padding:12px;
+  cursor:pointer;transition:border-color .15s, background .15s, opacity .15s;
+  position:relative;min-height:58px;
+}
+.doc-slot.filled{border-style:solid;border-color:var(--teal);background:var(--teal-soft);}
+.doc-slot.mismatch{border-style:solid;border-color:var(--red);background:var(--red-soft);}
+.doc-slot.drag{border-color:var(--teal);background:var(--teal-soft);}
+.doc-slot.dim{opacity:.45;}
+.doc-slot input{display:none;}
+.doc-remove-btn{
+  position:absolute;top:6px;right:6px;
+  width:20px;height:20px;border-radius:50%;
+  border:none;background:rgba(0,0,0,0.12);color:var(--ink);
+  font-size:13px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  padding:0;z-index:2;
+}
+.doc-remove-btn:hover{background:var(--red);color:#fff;}
+.doc-label{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.05em;
+  color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:5px;
+}
+.doc-filename{font-size:12.5px;color:var(--ink);word-break:break-all;}
+.doc-empty{font-size:12.5px;color:#8A9289;}
+.doc-mismatch-tag{font-size:11px;color:var(--red);font-weight:700;margin-top:3px;}
+.analyze-btn{
+  background:var(--ink);color:#fff;border:none;padding:10px 16px;
+  border-radius:7px;font-size:13.5px;font-weight:600;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;
+}
+.analyze-btn:disabled{background:#B7BDB6;cursor:not-allowed;}
+.analyze-btn:hover:not(:disabled){background:#000;}
+.status-msg{font-size:13px;color:var(--ink-soft);margin-left:12px;}
+.stamp{
+  display:inline-flex;align-items:center;gap:8px;
+  border:2px solid; border-radius:999px; padding:6px 16px 6px 12px;
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;
+  letter-spacing:.02em; transform:rotate(-2deg);
+}
+.stamp.ok{color:var(--green);border-color:var(--green);background:var(--green-soft);}
+.stamp.warn{color:var(--amber);border-color:var(--amber);background:var(--amber-soft);}
+.stamp.bad{color:var(--red);border-color:var(--red);background:var(--red-soft);}
+.stamp .dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block;}
+.rate-pill{
+  font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;
+  padding:5px 10px;border-radius:999px;background:#EEF1EC;color:var(--ink-soft);
+}
+.result{margin-top:18px;border-top:1px solid var(--line);padding-top:16px;}
+.result-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+.field-table{width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:14px;}
+.field-table th{
+  text-align:left;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;
+  padding:6px 10px;border-bottom:1px solid var(--line);
+}
+.field-table td{padding:7px 10px;border-bottom:1px solid #EEF1EC;vertical-align:top;}
+.match-yes{color:var(--green);font-weight:600;}
+.match-no{color:var(--red);font-weight:600;}
+.match-unk{color:var(--ink-soft);}
+.note-box{font-size:13px;color:var(--ink-soft);background:#F7F8F5;border-radius:7px;padding:10px 12px;}
+.raw-error{font-size:12.5px;color:var(--red);white-space:pre-wrap;background:var(--red-soft);border-radius:7px;padding:10px 12px;}
+.type-mismatch{font-size:12.5px;color:var(--amber);background:var(--amber-soft);padding:8px 10px;border-radius:7px;margin-bottom:10px;}
+.doc-warning{font-size:12.5px;color:var(--red);background:var(--red-soft);padding:8px 10px;border-radius:7px;margin-bottom:10px;line-height:1.6;}
+.doc-ok{font-size:12.5px;color:var(--green);background:var(--green-soft);padding:8px 10px;border-radius:7px;margin-bottom:10px;}
+.export-bar{
+  position:sticky;bottom:16px;margin-top:8px;
+  background:var(--ink);color:#fff;border-radius:10px;
+  padding:14px 20px;display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 10px 30px rgba(0,0,0,.18);
+}
+.export-bar .txt{font-size:13.5px;color:#D9DED8;}
+.export-btn{
+  background:#fff;color:var(--ink);border:none;padding:10px 18px;
+  border-radius:7px;font-weight:700;font-size:13.5px;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;
+}
+.export-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* 모바일 대응 */
+@media (max-width: 720px){
+  body{padding:16px 12px 90px;}
+  h1{font-size:24px;}
+  .doc-grid{grid-template-columns:1fr 1fr;}
+  .card{padding:16px 14px 18px;}
+  .export-bar{flex-direction:column;align-items:stretch;gap:10px;}
+  .export-bar > div{display:flex;flex-direction:column;gap:8px;}
+  .export-btn{width:100%;}
+  .case-link-row{flex-direction:column;align-items:stretch !important;}
+}
+@media (max-width: 460px){
+  .doc-grid{grid-template-columns:1fr;}
+}
+
+.case-panel{
+  margin-top:14px;padding:14px;border-radius:8px;background:#F7F8F5;border:1px solid var(--line);
+}
+.case-link-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.case-link-input{
+  flex:1;min-width:180px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+  padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink);
+}
+.case-btn{
+  background:var(--teal);color:#fff;border:none;padding:8px 14px;border-radius:6px;
+  font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;
+}
+.case-btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line);}
+.case-btn:disabled{opacity:.5;cursor:not-allowed;}
+.case-qr{margin-top:10px;}
+.case-qr img{border-radius:8px;border:1px solid var(--line);}
+.case-status-note{font-size:12px;color:var(--ink-soft);margin-top:8px;}
+
+.dentist-request-btn{
+  background:var(--violet);color:#fff;border:none;padding:10px 16px;
+  border-radius:7px;font-size:13.5px;font-weight:600;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;margin-left:8px;
+}
+.dentist-request-btn:hover{background:#453a6c;}
+.refresh-btn{
+  background:none;border:1px solid var(--line);color:var(--ink-soft);
+  padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;margin-left:8px;
+}
+.refresh-btn:hover{background:#F0F1EE;}
+.dentist-panel{
+  margin-top:14px;padding:16px;background:var(--violet-soft);border:1px solid #D3C9EA;
+  border-radius:10px;
+}
+.dentist-panel .link-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.dentist-panel input[type=text]{
+  flex:1;min-width:200px;font-family:'IBM Plex Mono',monospace;font-size:12px;
+  padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;
+}
+.dentist-panel .copy-btn{
+  background:var(--violet);color:#fff;border:none;padding:8px 14px;border-radius:6px;
+  font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;
+}
+.dentist-panel .qr-box{display:flex;justify-content:center;padding:12px;background:#fff;border-radius:8px;width:fit-content;}
+.badge-sales{font-size:10px;background:var(--teal);color:#fff;padding:2px 6px;border-radius:999px;margin-left:4px;}
+.badge-dentist{font-size:10px;background:var(--violet);color:#fff;padding:2px 6px;border-radius:999px;margin-left:4px;}
+
+/* ---------- 모바일 반응형 ---------- */
+@media (max-width: 720px){
+  body{padding:20px 12px 100px;}
+  h1{font-size:24px;}
+  .doc-grid{grid-template-columns:1fr;}
+  .card-top{flex-direction:column;align-items:flex-start;gap:6px;}
+  .type-row{flex-direction:column;align-items:flex-start;gap:10px;}
+  .type-toggle button{padding:10px 16px;}
+  .export-bar{flex-direction:column;align-items:stretch;gap:10px;position:static;}
+  .export-bar > div{display:flex;flex-direction:column;gap:8px;}
+  .result-head{flex-direction:column;align-items:flex-start;}
+  .dentist-panel .link-row{flex-direction:column;align-items:stretch;}
+  .dentist-panel input[type=text]{width:100%;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<span class="eyebrow">Netra · Registration QA</span>
+<h1>歯科登録書類検証 TEST123</h1>
+<p class="sub">ユーザーごとに証憑書類（PDF/画像）をアップロードすると、書類間の氏名・住所を照合し、登録適合性をAIが自動判定します。</p>
+<div class="disclaimer">⚠ AIが書類画像を読み取り、自動抽出・比較した結果です。誤認識の可能性があるため、最終確認は必ず担当者が行ってください。</div>
+<div class="rules-box">
+<b>判定基準</b><br>
+・登録種別は<b>歯科（事業者）</b>／<b>個人（勤務者）</b>を必ず区別して選択します。<br>
+・最低<b>2件以上</b>の証憑書類があり、書類間の情報<b>一致率80%以上</b>であれば登録可能と判定します。<br>
+・<b>契約書</b>がある場合、署名者が歯科代表者と一致していれば「歯科として認定」、不一致の場合は追加確認が必要です。<br>
+・書類間の氏名・住所が明らかに異なる場合 → <b>要確認</b>。必須書類があり情報がおおむね一致していれば <b>適合（登録可能）</b> と判定します。
+</div>
+</header>
+
+<button class="add-btn" onclick="addCandidate()">＋ ユーザー追加</button>
+<div id="cards"></div>
+
+<div class="export-bar">
+  <span class="txt" id="exportInfo">分析完了したユーザーがいません。</span>
+  <div style="display:flex;gap:8px;">
+    <button class="export-btn" id="exportBtn" disabled onclick="exportExcel()">Excelダウンロード</button>
+    <button class="export-btn" id="sheetBtn" disabled onclick="exportToSheet()">新規登録要請</button>
+  </div>
+</div>
+</div>
+
+<script>
+const DOC_TYPES = [
+  {key:'license', label:'歯科医師免許証', biz:true, indiv:true},
+  {key:'business_card', label:'名刺', biz:true, indiv:true},
+  {key:'employee_id', label:'社員証', biz:false, indiv:true},
+  {key:'homepage', label:'ホームページスクリーンショット', biz:true, indiv:false},
+  {key:'iryokikan', label:'医療機関情報スクリーンショット', biz:true, indiv:false},
+  {key:'opening_cert', label:'開設証明書スクリーンショット', biz:true, indiv:false},
+  {key:'job_posting', label:'求人サイトスクリーンショット（開院前）', biz:true, indiv:false},
+  {key:'corp_registry', label:'全部事項証明書（法人登記）', biz:true, indiv:false},
+  {key:'contract', label:'契約書', biz:true, indiv:true}
+];
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let candidates = [];
+let seq = 0;
+
+async function addCandidate(){
+  const id = 'c' + (seq++);
+  const c = {id, name:'', memo:'', regType:'biz', preOpen:false, includeEmail:false, files:{}, status:'idle', result:null, error:null,
+             caseId:null, caseReady:false, showDentistPanel:false, dentistFilledKeys:[]};
+  candidates.push(c);
+  render();
+  try{
+    const resp = await gsRun('createCase', c.regType, c.preOpen);
+    if(resp && resp.ok){
+      c.caseId = resp.caseId;
+      c.caseReady = true;
+    } else {
+      c.error = 'ケースの作成に失敗しました。ページを再読み込みして再度お試しください。';
+      c.status = 'error';
+    }
+  }catch(e){
+    c.error = 'ケースの作成中にシステムエラーが発生しました: ' + e.message;
+    c.status = 'error';
+  }
+  render();
+}
+function updateMemo(id, val){
+  const c = candidates.find(x=>x.id===id);
+  if(c) c.memo = val;
+}
+async function removeCandidate(id){
+  const c = candidates.find(x=>x.id===id);
+  if(!c) return;
+  const label = c.memo ? `${c.name || '（名前未入力）'}（${c.memo}）` : (c.name || 'このユーザー');
+  const confirmed = confirm(
+    `${label} を削除します。\n\n` +
+    `・この操作は取り消せません。\n` +
+    `・すでに先生に共有した提出用リンク／QRコードも使用できなくなります（先生がアクセスすると「このリンクは無効です」という案内が表示されます）。\n\n` +
+    `本当に削除してよろしいですか？`
+  );
+  if(!confirmed) return;
+
+  candidates = candidates.filter(x => x.id !== id);
+  render();
+
+  if(c.caseId){
+    try{ await gsRun('deleteCase', c.caseId); }catch(e){ /* 로컬 삭제는 이미 진행되었으므로 조용히 무시 */ }
+  }
+}
+function updateName(id, val){
+  const c = candidates.find(x=>x.id===id);
+  if(c) c.name = val;
+}
+function setRegType(id, type){
+  const c = candidates.find(x=>x.id===id);
+  if(c){
+    c.regType = type;
+    if(c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name).catch(()=>{});
+  }
+  render();
+}
+function togglePreOpen(id, checked){
+  const c = candidates.find(x=>x.id===id);
+  if(c){
+    c.preOpen = checked;
+    if(c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name).catch(()=>{});
+  }
+}
+function toggleIncludeEmail(id, checked){
+  const c = candidates.find(x=>x.id===id);
+  if(c) c.includeEmail = checked;
+  render();
+}
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.onerror = () => reject(new Error('ファイル読み込みに失敗しました'));
+    r.readAsDataURL(file);
+  });
+}
+function mimeFor(file){
+  if(file.type) return file.type;
+  const n = file.name.toLowerCase();
+  if(n.endsWith('.png')) return 'image/png';
+  if(n.endsWith('.jpg')||n.endsWith('.jpeg')) return 'image/jpeg';
+  return 'application/octet-stream';
+}
+function formatBytes(n){
+  if(n < 1024) return n + 'B';
+  if(n < 1024*1024) return (n/1024).toFixed(0) + 'KB';
+  return (n/1024/1024).toFixed(1) + 'MB';
+}
+function resizeImage(file, maxDim=1568, quality=0.85){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let width = img.width, height = img.height;
+      if(width > maxDim || height > maxDim){
+        const ratio = Math.min(maxDim/width, maxDim/height);
+        width = Math.round(width*ratio);
+        height = Math.round(height*ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve({base64: dataUrl.split(',')[1], mime:'image/jpeg'});
+    };
+    img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+    img.src = url;
+  });
+}
+async function pdfToImages(file, maxPages=4, maxDim=1568, quality=0.8){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  const n = Math.min(pdf.numPages, maxPages);
+  const pages = [];
+  for(let i=1; i<=n; i++){
+    const page = await pdf.getPage(i);
+    const base = page.getViewport({scale:1});
+    const scale = Math.min(maxDim/base.width, maxDim/base.height);
+    const viewport = page.getViewport({scale: Math.max(scale, 0.3)});
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d');
+    await page.render({canvasContext: ctx, viewport}).promise;
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    pages.push({base64: dataUrl.split(',')[1], mime:'image/jpeg'});
+  }
+  return pages;
+}
+async function handleFile(candId, docKey, file){
+  const c = candidates.find(x=>x.id===candId);
+  if(!c || !file) return;
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  const isImage = !isPdf && (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name));
+  // 홈페이지 스크린샷은 주소창의 작은 글씨가 뭉개지지 않도록 더 높은 해상도/화질로 저장합니다.
+  const isHomepage = docKey === 'homepage';
+  const imgMaxDim = isHomepage ? 2200 : 1568;
+  const imgQuality = isHomepage ? 0.95 : 0.85;
+  const pdfMaxDim = isHomepage ? 2200 : 1568;
+  const pdfQuality = isHomepage ? 0.92 : 0.8;
+  let pages;
+  try{
+    if(isPdf){
+      pages = await pdfToImages(file, 4, pdfMaxDim, pdfQuality);
+    } else if(isImage){
+      pages = [await resizeImage(file, imgMaxDim, imgQuality)];
+    } else {
+      pages = [{base64: await fileToBase64(file), mime: mimeFor(file)}];
+    }
+  }catch(e){
+    console.error(e);
+    alert('ファイルを処理できませんでした: ' + e.message);
+    return;
+  }
+  const bytes = pages.reduce((s,p)=> s + Math.round(p.base64.length*0.75), 0);
+  c.files[docKey] = {name:file.name, pages, bytes, sizeLabel: formatBytes(bytes), pageCount: pages.length, syncing:true, syncError:false};
+  render();
+
+  // 서버(구글 드라이브)에도 동시에 저장해서, 선생님 쪽에서 올린 서류와 나중에 합칠 수 있게 합니다.
+  if(c.caseId){
+    try{
+      const resp = await gsRun('uploadCaseFile', c.caseId, docKey, pages, 'sales', file.name);
+      if(c.files[docKey]){
+        c.files[docKey].syncing = false;
+        c.files[docKey].syncError = !(resp && resp.ok);
+      }
+    }catch(e){
+      if(c.files[docKey]){
+        c.files[docKey].syncing = false;
+        c.files[docKey].syncError = true;
+      }
+    }
+    render();
+  }
+}
+function onDrop(e, candId, docKey){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if(file) handleFile(candId, docKey, file);
+}
+
+function buildSchemaPrompt(cand){
+  const typeLabel = cand.regType === 'biz' ? '歯科（事業者）登録' : '個人（勤務者）登録';
+  const preOpenNote = (cand.regType === 'biz' && cand.preOpen)
+    ? 'この歯科医院はまだ開院前です。求人サイトのスクリーンショットや全部事項証明書（法人登記事項証明書）などが代替書類になり得ることを考慮してください。'
+    : '';
+  const typeContext = cand.regType === 'biz'
+    ? `担当者はこのユーザーを「歯科（事業者）登録」として分類しました。事業所（歯科医院）名義で登録されるケースです。${preOpenNote}`
+    : `担当者はこのユーザーを「個人（勤務者）登録」として分類しました。この人物は歯科の代表者ではなく、歯科医院に勤務するスタッフです。`;
+
+  const docListForPrompt = DOC_TYPES.map(d => `- ${d.key}（表示名: ${d.label}）`).join('\n');
+
+  return `あなたは歯科登録審査の補助アシスタントです。${typeContext}
+
+以下に、複数の書類（PDFまたは画像）がラベル付きで添付されています。各画像がどのラベル（書類の種類）に対応するかを踏まえて解析してください。
+
+【重要】各書類について、実際にアップロードされた画像の内容が、意図されたラベル（書類の種類）と一致しているかを必ず確認してください。例えば「歯科医師免許証」の枠に名刺の画像が入っていた場合など、明らかにラベルと異なる書類が添付されているケースを検出し、document_type_check に報告してください。ラベルと一致しない場合でも、実際に写っている書類の内容は可能な限り抽出してください。
+
+各文書から医院名／氏名／住所／電話番号／代表者名などを可能な限り正確に読み取り、書類間で氏名・住所が一致しているか照合してください。
+「医療機関情報スクリーンショット」に処方箋発行医療機関コードの表が写っている場合、都道府県コード・保険区分・医療機関コードの3つを組み合わせた「全体コード」（例: 27+3+4403120 → 2734403120）と、単独の「医療機関コード」（例: 4403120）の両方を抽出してください。同じスクリーンショットに「開設者名／管理者名」の行がある場合（例: 医療法人社団○○理事長△△　／　△△）、肩書きを含む開設者名の全文と、管理者名をそれぞれ抽出してください。
+名刺・ホームページ・医療機関情報スクリーンショットにFAX番号の記載がある場合は必ずFAX番号も抽出してください。
+名刺にメールアドレスの記載がある場合は抽出してください（実際に登録情報として使うかどうかは担当者が後で判断するため、記載があれば必ず抽出だけはしておいてください）。
+「ホームページスクリーンショット」については、以下の2つを追加で抽出してください:
+・ホームページURL: ブラウザのアドレスバーやページ内リンクに表示されているウェブサイトのURL（ドメイン）。
+・メイン住所: そのホームページに複数の住所（本院・分院・アクセス情報など）が記載されている場合、トップページや会社概要・アクセスページに記載されている「本院・メインの所在地」と判断できる住所を1つだけ選んで抽出してください（確認用の項目のため、他の書類の住所と多少表記が異なっていても構いません）。
+
+判定ルール（必ず順番に適用。数値・件数条件を厳密に守り、独自の追加条件を作らないこと）:
+1. 提出された書類の件数が「2件未満」の場合のみ → overall_status = "不適合（書類不足）"。
+   重要: 提出書類が2件以上あれば、たとえ「医療機関情報スクリーンショット」や「開設証明書」など特定の種類の書類が含まれていなくても、その理由だけで「書類不足」と判定してはいけません。書類の組み合わせの妥当性ではなく、件数のみをこの条件の判断基準にしてください。
+2. 書類間の氏名または住所が明らかに異なる場合 → overall_status = "要確認"
+3. 契約書が提出されており「歯科（事業者）登録」ケースで、署名者が代表者名と異なる場合 → overall_status = "要確認"
+4. 「参考: インターネット上の実際のウェブサイトから取得した内容」が提供されている場合、その内容と書類上の医院名・住所・電話番号などを照合し、website_verification に結果を記載してください。明らかに異なる医院の情報が書かれている場合 → overall_status = "要確認"。ウェブサイト内容が提供されていない場合は website_verification.実施有無 を false、result を "未実施" としてください。
+5. 提出書類が2件以上あり、書類間の情報一致率（match_rate, 0〜100の整数）が80以上で、かつ上記2・3・4に該当しない場合 → overall_status = "適合（登録可能）"。ある項目（住所など）が一部の書類に記載されておらず「確認不可」であっても、他の項目が一致していれば不利に扱わないでください。
+6. その他の曖昧なケース → overall_status = "要確認"
+
+以下のJSON形式のみで応答してください。説明文やマークダウン、コードフェンスは一切不要です、純粋なJSONのみを出力してください:
+
+対応する書類キー一覧:
+${docListForPrompt}
+
+{
+  "registration_type_note": "提出書類が選択された登録種別（${typeLabel}）と合致しているかについての一言コメント",
+  "documents": {
+    "license": {"提出有無": true, "氏名": "", "免許番号": "", "免許種別": ""},
+    "business_card": {"提出有無": true, "氏名": "", "医院名": "", "役職": "", "電話番号": "", "FAX番号": "", "メールアドレス": ""},
+    "employee_id": {"提出有無": true, "氏名": "", "医院名": ""},
+    "homepage": {"提出有無": true, "医院名": "", "住所": "", "電話番号": "", "FAX番号": "", "ホームページURL": "", "メイン住所": ""},
+    "iryokikan": {"提出有無": true, "医院名": "", "住所": "", "電話番号": "", "FAX番号": "", "医療機関コード": "", "全体コード": "", "開設者名": "", "管理者名": ""},
+    "opening_cert": {"提出有無": true, "医院名": "", "代表者名": "", "住所": "", "開設日": ""},
+    "job_posting": {"提出有無": true, "医院名": "", "住所": ""},
+    "corp_registry": {"提出有無": true, "法人名": "", "代表者名": "", "住所": ""},
+    "contract": {"提出有無": true, "署名者": "", "歯科名": ""}
+  },
+  "document_type_check": {
+    "all_match": true,
+    "mismatches": [{"slot_key": "", "expected_label": "", "note": "実際にはどんな書類が写っていたかの説明"}]
+  },
+  "website_verification": {
+    "実施有無": false,
+    "確認したURL": "",
+    "result": "未実施",
+    "detail": ""
+  },
+  "cross_check": {
+    "name_consistency": {"result": "一致", "detail": ""},
+    "address_consistency": {"result": "一致", "detail": ""}
+  },
+  "contract_check": {"applicable": false, "signer_name": "", "representative_name": "", "matches_representative": null},
+  "doc_count_submitted": 0,
+  "match_rate": 0,
+  "overall_status": "適合（登録可能）",
+  "overall_note": "",
+  "netra_export": {
+    "doctor": "",
+    "person_name": "",
+    "tel_no": "",
+    "fax_no": "",
+    "email": "",
+    "area_sido": "",
+    "city_sigungu": "",
+    "license_no": "",
+    "institution_code": "",
+    "institution_code_full": "",
+    "specialty": "歯科",
+    "bill_to": "",
+    "ship_to": ""
+  }
+}
+
+result 値には "一致" | "不一致" | "確認不可" のいずれかのみを使用してください。website_verification.result にはこれに加えて "未実施"（ウェブサイト内容が提供されなかった場合）も使用できます。overall_status には "適合（登録可能）" | "要確認" | "不適合（書類不足）" のいずれかのみを使用してください。すべてのコメント・説明文は日本語で記述してください。`;
+}
+
+// ===== API_URL: 여기에 새로 배포한 Apps Script exec 주소를 넣어주세요 =====
+const API_URL = 'https://script.google.com/macros/s/AKfycbwpQBJ3-mdX97DMEF21Jk4HHwHyZAG9CdoGRlHyW4gm0Lt0_HeSg_YdSEJhOPG-7TLklQ/exec';
+// ===== DENTIST_PAGE_URL: DentistUpload.html이 실제로 올라갈 GitHub Pages 주소 =====
+const DENTIST_PAGE_URL = 'https://lee220287-ops.github.io/netra-dental-app/DentistUpload.html';
+
+function gsRun(fnName, ...args){
+  return fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ fn: fnName, args: args })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if(data && data.__error){ throw new Error(data.__error); }
+      return data;
+    });
+}
+
+async function analyzeCandidate(id){
+  const c = candidates.find(x=>x.id===id);
+  if(!c) return;
+  const restoredKeys = DOC_TYPES.filter(d => c.files[d.key] && c.files[d.key].restoredWithoutData).map(d=>d.label);
+  if(restoredKeys.length > 0){
+    alert(`次の書類はページ再読み込みのため画像データが失われています。解析に含めるには再度添付してください:\n・${restoredKeys.join('\n・')}`);
+  }
+  const attached = DOC_TYPES.filter(d => c.files[d.key] && !c.files[d.key].restoredWithoutData);
+  if(attached.length === 0){ alert('最低1つ以上の書類を添付してください。'); return; }
+
+  const totalBytes = attached.reduce((sum,d)=> sum + (c.files[d.key].bytes || 0), 0);
+  if(totalBytes > 14*1024*1024){
+    const ok = confirm(`添付された書類の合計サイズが約${formatBytes(totalBytes)}と大きいです。リクエストが失敗する可能性がありますが、続行しますか？`);
+    if(!ok) return;
+  }
+
+  c.status = 'analyzing';
+  c.error = null;
+  c.websiteCheckNote = null;
+  render();
+
+  // --- 1단계: 홈페이지 스크린샷이 있으면 실제 URL을 먼저 읽어서, 라이브 웹사이트 내용을 가져옵니다 ---
+  let liveWebsiteUrl = '';
+  let liveWebsiteText = '';
+  if(c.files['homepage']){
+    try{
+      const urlParts = [{text:
+        'これはウェブブラウザで歯科医院のホームページを表示したスクリーンショットです。\n' +
+        '画面の最上部にあるブラウザの「アドレスバー」に表示されている文字列だけを、一字一句そのまま書き写してください。\n' +
+        '厳守事項:\n' +
+        '・医院名やページ内の見出し・本文から連想したり、それらしいドメイン名を推測して作り出してはいけません。\n' +
+        '・アドレスバーが画面に写っていない、小さすぎて文字が判読できない、あるいはブラウザのスクリーンショットではない場合は、必ず「不明」とだけ出力してください。\n' +
+        '・出力は説明文や記号を一切付けず、URL文字列（または「不明」）のみを1行で出力してください。'
+      }];
+      c.files['homepage'].pages.forEach(p => {
+        urlParts.push({inlineData:{mimeType:p.mime, data:p.base64}});
+      });
+      const urlResp = await gsRun('callGoogleGeminiAPI', {contents:[{parts:urlParts}]});
+      if(urlResp && urlResp.ok){
+        const urlData = JSON.parse(urlResp.text);
+        let rawUrl = (urlData.candidates[0].content.parts[0].text || '').trim();
+        rawUrl = rawUrl.replace(/^["'\s]+|["'\s]+$/g, '');
+
+        // 형식 검증: 도메인처럼 생겼는지 확인 (일본어/한글 등 비ASCII 문자, 공백, 마침표 없음 등은 오인식으로 간주)
+        const looksLikeDomain = rawUrl
+          && rawUrl !== '不明'
+          && !/\s/.test(rawUrl)
+          && /^[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/.test(rawUrl.replace(/^https?:\/\//i,''))
+          && /\.[a-zA-Z]{2,}/.test(rawUrl);
+
+        if(!rawUrl || rawUrl === '不明'){
+          c.websiteCheckNote = 'スクリーンショットからURLを認識できなかったため、ライブ照合はスキップされました。';
+        } else if(!looksLikeDomain){
+          c.websiteCheckNote = `スクリーンショットから読み取った文字列（「${rawUrl}」）がURLとして不自然だったため、誤認識の可能性があると判断し、ライブ照合はスキップされました。`;
+        } else {
+          liveWebsiteUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : ('https://' + rawUrl.replace(/^\/+/, ''));
+          const fetchResp = await gsRun('fetchWebpageText', liveWebsiteUrl);
+          if(fetchResp && fetchResp.ok){
+            liveWebsiteText = fetchResp.text;
+          } else {
+            c.websiteCheckNote = `ウェブサイト（${liveWebsiteUrl}）への接続に失敗したため、ライブ照合は行われませんでした。（読み取ったURLが誤っている可能性もあります）`;
+          }
+        }
+      }
+    }catch(e){
+      console.error('ウェブサイト確認中にエラー:', e);
+      c.websiteCheckNote = 'ウェブサイトの確認中にエラーが発生したため、ライブ照合は行われませんでした。';
+    }
+  }
+
+  // --- 2단계: 서류 이미지 + (있으면) 실제 웹사이트 내용을 함께 분석 요청 ---
+  const parts = [];
+  parts.push({text: buildSchemaPrompt(c)});
+  if(liveWebsiteText){
+    parts.push({text: `\n【参考: インターネット上の実際のウェブサイトから取得した内容】\n確認したURL: ${liveWebsiteUrl}\n---\n${liveWebsiteText}\n---\n上記は、担当者ではなくシステムが実際にそのURLへ接続して取得した生の情報です。この内容と、書類・スクリーンショットから読み取れる医院名・住所・電話番号などを照合し、website_verification フィールドに結果を記載してください。`});
+  }
+  for(const d of attached){
+    const f = c.files[d.key];
+    f.pages.forEach((p, idx) => {
+      const label = f.pages.length > 1 ? `\n[書類キー: ${d.key} / 表示名: ${d.label} - ${idx+1}ページ目]\n` : `\n[書類キー: ${d.key} / 表示名: ${d.label}]\n`;
+      parts.push({text: label});
+      parts.push({
+        inlineData: {
+          mimeType: p.mime,
+          data: p.base64
+        }
+      });
+    });
+  }
+
+  try{
+    const resp = await gsRun('callGoogleGeminiAPI', {contents:[{parts:parts}]});
+    if(!resp.ok){
+      c.status = 'error';
+      c.error = `AI分析エラー（状態 ${resp.status}）: ${resp.text.slice(0,1500)}`;
+      render();
+      return;
+    }
+    const data = JSON.parse(resp.text);
+    const geminiText = data.candidates[0].content.parts[0].text;
+    const clean = geminiText.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+    c.result = parsed;
+    c.status = 'done';
+  }catch(parseErr){
+    console.error(parseErr);
+    c.status = 'error';
+    c.error = '応答データを解析できませんでした。もう一度お試しください。';
+  }
+  render();
+  if(c.status === 'done'){
+    checkDuplicateForCandidate(c.id);
+  }
+}
+
+// 스프레드시트에 이미 등록되어 있는 치과와 한 항목(電話番号／FAX／住所／免許番号／医療機関コード／医院名・氏名)이라도
+// 일치하면 중복 거래처로 의심된다고 표시합니다.
+async function checkDuplicateForCandidate(id){
+  const c = candidates.find(x=>x.id===id);
+  if(!c || !c.result) return;
+  const f = computeCandidateFields(c);
+  c.duplicateChecking = true;
+  render();
+  try{
+    const resp = await gsRun('checkDuplicateClinic', {
+      doctor: f.doctorField,
+      tel: f.telField,
+      fax: f.faxField,
+      address: f.addressField,
+      license: f.licenseField,
+      code: f.codeField
+    });
+    if(resp && resp.ok){
+      c.duplicateCheck = resp;
+    } else {
+      c.duplicateCheck = { ok:false, error: (resp && resp.error) || '不明なエラー' };
+    }
+  }catch(e){
+    c.duplicateCheck = { ok:false, error: e.message };
+  }
+  c.duplicateChecking = false;
+  render();
+}
+
+function statusStampClass(status){
+  if(!status) return 'bad';
+  if(status.indexOf('適合') === 0) return 'ok';
+  if(status.indexOf('要確認') === 0) return 'warn';
+  return 'bad';
+}
+function matchClass(result){
+  if(result === '一致') return 'match-yes';
+  if(result === '不一致') return 'match-no';
+  return 'match-unk';
+}
+
+function docSlotHTML(cand, doc){
+  const f = cand.files[doc.key];
+  const filled = !!f;
+  const relevant = cand.regType === 'biz' ? doc.biz : doc.indiv;
+  let mismatchNote = null;
+  if(cand.result && cand.result.document_type_check && Array.isArray(cand.result.document_type_check.mismatches)){
+    mismatchNote = cand.result.document_type_check.mismatches.find(m => m.slot_key === doc.key);
+  }
+  const mismatchClass = mismatchNote ? 'mismatch' : '';
+  return `
+    <div class="doc-slot ${filled?'filled':''} ${mismatchClass} ${relevant?'':'dim'}"
+      ondragover="event.preventDefault(); event.currentTarget.classList.add('drag')"
+      ondragleave="event.currentTarget.classList.remove('drag')"
+      ondrop="onDrop(event,'${cand.id}','${doc.key}')"
+      onclick="document.getElementById('file-${cand.id}-${doc.key}').click()">
+      ${filled ? `<button type="button" class="doc-remove-btn" title="削除" onclick="removeFile('${cand.id}','${doc.key}', event)">×</button>` : ''}
+      <span class="doc-label">${doc.label}</span>
+      ${filled ? `<div class="doc-filename">📄 ${f.name}${f.pageCount>1 ? ` (${f.pageCount}ページ)` : ''} <span style="color:var(--ink-soft)">・${f.sizeLabel}</span></div>` : `<div class="doc-empty">クリックまたはドラッグで添付</div>`}
+      ${f && f.syncing ? `<div class="doc-mismatch-tag" style="color:var(--ink-soft)">⏳ 同期中…</div>` : ''}
+      ${f && f.syncError ? `<div class="doc-mismatch-tag">⚠ ケースへの同期に失敗しました</div>` : ''}
+      ${f && f.restoredWithoutData ? `<div class="doc-mismatch-tag" style="color:var(--ink-soft)">↻ 保存済み（再解析する場合は再度添付してください）</div>` : ''}
+      ${mismatchNote ? `<div class="doc-mismatch-tag">⚠ 書類の種類が一致しない可能性</div>` : ''}
+      <input type="file" id="file-${cand.id}-${doc.key}" accept=".pdf,image/*"
+        onchange="handleFile('${cand.id}','${doc.key}', this.files[0])">
+    </div>`;
+}
+
+function removeFile(candId, docKey, event){
+  if(event){ event.stopPropagation(); }
+  const c = candidates.find(x=>x.id===candId);
+  if(c && c.files[docKey]){
+    delete c.files[docKey];
+    render();
+    if(c.caseId){
+      gsRun('deleteCaseFile', c.caseId, docKey).catch(()=>{});
+    }
+  }
+}
+
+function caseLinkFor(cand){
+  return DENTIST_PAGE_URL + '?caseId=' + cand.caseId;
+}
+
+function casePanelHTML(cand){
+  if(!cand.caseId){
+    return `<div class="case-panel"><div class="case-status-note">リンクを準備中です…</div></div>`;
+  }
+  const link = caseLinkFor(cand);
+  const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(link);
+  const pendingCount = (cand.dentistFilledKeys || []).filter(k => !cand.files[k] || cand.files[k].source !== 'dentist').length;
+  return `
+    <div class="case-panel">
+      ${pendingCount > 0 ? `<div class="case-status-note" style="background:var(--amber-soft);color:#7A5111;border:1px solid #E8CE9C;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-weight:700;">🔔 先生から書類が届いています（${pendingCount}件・未反映）。下のボタンで反映してください。</div>` : ''}
+      <div class="case-link-row">
+        <input class="case-link-input" readonly value="${link}" onclick="this.select()">
+        <button class="case-btn" onclick="copyCaseLink('${cand.id}')">リンクをコピー</button>
+        <button class="case-btn secondary" onclick="toggleCaseQr('${cand.id}')">QRコード表示</button>
+        <button class="case-btn secondary" onclick="checkCaseUpdates('${cand.id}')" ${cand.caseChecking ? 'disabled' : ''}>
+          ${cand.caseChecking ? '確認中…' : ('先生の提出を確認・反映' + (pendingCount > 0 ? `（${pendingCount}件）` : ''))}
+        </button>
+      </div>
+      ${cand.showCaseQr ? `<div class="case-qr"><img src="${qrSrc}" alt="QRコード" width="180" height="180"></div>` : ''}
+      <div class="case-status-note">このリンクを先生に送るか、QRコードを読み取っていただくと、先生ご本人のスマホから直接書類を提出できます（担当者がここで添付した内容は先生には表示されません）。ここでアップロードした書類も自動的にこのケースに同期されます。書類が届くと、上記のバッジで自動的にお知らせします（約20秒ごとに自動確認）。</div>
+    </div>`;
+}
+
+function toggleCaseQr(candId){
+  const c = candidates.find(x=>x.id===candId);
+  if(c){ c.showCaseQr = !c.showCaseQr; render(); }
+}
+
+function copyCaseLink(candId){
+  const c = candidates.find(x=>x.id===candId);
+  if(!c || !c.caseId) return;
+  const link = caseLinkFor(c);
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(link).then(()=> alert('リンクをコピーしました。')).catch(()=> alert(link));
+  } else {
+    alert(link);
+  }
+}
+
+async function checkCaseUpdates(candId){
+  const c = candidates.find(x=>x.id===candId);
+  if(!c || !c.caseId) return;
+  c.caseChecking = true;
+  render();
+  try{
+    const resp = await gsRun('getCaseStatus', c.caseId);
+    if(resp && resp.ok){
+      const dentistKeys = Object.keys(resp.files).filter(k => resp.files[k].source === 'dentist');
+      c.dentistFilledKeys = dentistKeys;
+      const toFetch = dentistKeys.filter(k => !c.files[k] || c.files[k].source !== 'dentist');
+      let addedCount = 0;
+      for(const docKey of toFetch){
+        const fileResp = await gsRun('getCaseFile', c.caseId, docKey);
+        if(fileResp && fileResp.ok){
+          const bytes = fileResp.pages.reduce((s,p)=> s + Math.round(p.base64.length*0.75), 0);
+          c.files[docKey] = { name: fileResp.name, pages: fileResp.pages, bytes, sizeLabel: formatBytes(bytes), pageCount: fileResp.pageCount, source: 'dentist' };
+          addedCount++;
+        }
+      }
+      if(addedCount > 0){
+        alert(`先生から提出された書類 ${addedCount}件を反映しました。`);
+      } else if(dentistKeys.length === 0){
+        alert('まだ先生からの提出はありません。');
+      } else {
+        alert('新しい提出はありません（すでに反映済みです）。');
+      }
+    } else {
+      alert('確認に失敗しました: ' + (resp ? resp.error : '不明なエラー'));
+    }
+  }catch(e){
+    alert('通信エラーが発生しました: ' + e.message);
+  }
+  c.caseChecking = false;
+  render();
+}
+
+function institutionCodeDisplay(r){
+  const ne = r.netra_export || {};
+  const d = r.documents || {};
+  const code = ne.institution_code || d.iryokikan?.医療機関コード || '';
+  const full = ne.institution_code_full || d.iryokikan?.全体コード || '';
+  if(!code && !full) return '';
+  if(code && full) return `${code}-${full}`;
+  return code || full;
+}
+
+function distinctValues(arr){
+  const seen = new Map();
+  arr.forEach(v=>{
+    if(v === undefined || v === null) return;
+    const s = String(v).trim();
+    if(s === '') return;
+    if(!seen.has(s)) seen.set(s, s);
+  });
+  return Array.from(seen.values());
+}
+
+function getFieldSelection(cand, label, options){
+  if(!cand.fieldSelection) cand.fieldSelection = {};
+  let sel = cand.fieldSelection[label];
+  if(!sel){
+    sel = { mode:'value', value: options[0] || '' };
+    cand.fieldSelection[label] = sel;
+  }
+  return sel;
+}
+
+function setFieldSelection(candId, label, value){
+  const c = candidates.find(x=>x.id===candId);
+  if(!c) return;
+  if(!c.fieldSelection) c.fieldSelection = {};
+  if(value === '__custom__'){
+    const prev = c.fieldSelection[label];
+    c.fieldSelection[label] = { mode:'custom', value: (prev && prev.mode==='custom') ? prev.value : '' };
+  } else {
+    c.fieldSelection[label] = { mode:'value', value: value };
+  }
+  render();
+}
+
+function setFieldCustomText(candId, label, text){
+  const c = candidates.find(x=>x.id===candId);
+  if(!c) return;
+  if(!c.fieldSelection) c.fieldSelection = {};
+  c.fieldSelection[label] = { mode:'custom', value: text };
+}
+
+function fieldRowHTML(cand, label, values){
+  const options = distinctValues(values);
+  if(options.length === 0) return '';
+  const sel = getFieldSelection(cand, label, options);
+
+  if(options.length === 1 && sel.mode !== 'custom'){
+    // 값이 하나뿐이면 굳이 선택 UI를 보여주지 않고 텍스트로만 표시합니다.
+    return `<tr><td style="font-weight:600">${label}</td><td colspan="3">${options[0]}</td></tr>`;
+  }
+
+  const selectHTML = `
+    <select onchange="setFieldSelection('${cand.id}','${label}', this.value)" style="font-family:'Noto Sans JP',sans-serif;font-size:13px;padding:4px 6px;border-radius:5px;border:1px solid var(--line);max-width:100%;">
+      ${options.map(o => `<option value="${o.replace(/"/g,'&quot;')}" ${sel.mode==='value' && sel.value===o ? 'selected':''}>${o}</option>`).join('')}
+      <option value="__custom__" ${sel.mode==='custom' ? 'selected':''}>✏ 直接入力する</option>
+    </select>`;
+
+  const customInputHTML = sel.mode === 'custom'
+    ? `<input type="text" value="${(sel.value||'').replace(/"/g,'&quot;')}" placeholder="値を直接入力"
+        oninput="setFieldCustomText('${cand.id}','${label}', this.value)"
+        style="margin-top:6px;width:100%;font-family:'Noto Sans JP',sans-serif;font-size:13px;padding:5px 8px;border-radius:5px;border:1px solid var(--teal);">`
+    : '';
+
+  return `<tr><td style="font-weight:600">${label}</td><td colspan="3">${selectHTML}${customInputHTML}</td></tr>`;
+}
+
+function emailRowHTML(cand){
+  const email = cand.result?.documents?.business_card?.メールアドレス;
+  if(!email) return '';
+  return `<tr><td style="font-weight:600">メールアドレス</td><td colspan="3">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+        <input type="checkbox" ${cand.includeEmail?'checked':''} onchange="toggleIncludeEmail('${cand.id}', this.checked)">
+        <span>${email}</span>
+        <span style="color:var(--ink-soft);font-size:12px;">（チェックを入れると登録情報に含めます）</span>
+      </label>
+    </td></tr>`;
+}
+
+function resultHTML(cand){
+  if(cand.status === 'error'){
+    return `<div class="result"><div class="raw-error">${cand.error}</div></div>`;
+  }
+  if(cand.status !== 'done' || !cand.result) return '';
+  const r = cand.result;
+  const d = r.documents || {};
+  const rows = [
+    ['氏名', [d.license?.氏名, d.business_card?.氏名, d.employee_id?.氏名]],
+    ['医院名', [d.business_card?.医院名, d.homepage?.医院名, d.opening_cert?.医院名, d.iryokikan?.医院名]],
+    ['代表者名', [d.opening_cert?.代表者名, d.corp_registry?.代表者名]],
+    ['住所', [d.homepage?.住所, d.iryokikan?.住所, d.opening_cert?.住所, d.corp_registry?.住所]],
+    ['電話番号', [d.business_card?.電話番号, d.homepage?.電話番号, d.iryokikan?.電話番号]],
+    ['FAX番号', [d.business_card?.FAX番号, d.homepage?.FAX番号, d.iryokikan?.FAX番号]],
+    ['免許番号', [d.license?.免許番号]],
+    ['ホームページURL', [d.homepage?.ホームページURL]]
+  ];
+  const kaisetsushaParts = [d.iryokikan?.開設者名, d.iryokikan?.管理者名].filter(v => v && String(v).trim() !== '');
+  if(kaisetsushaParts.length > 0){
+    rows.push(['開設者名／管理者名', [kaisetsushaParts.join('　／　')]]);
+  }
+  const institutionCode = institutionCodeDisplay(r);
+  if(institutionCode){
+    rows.push(['医療機関コード', [institutionCode]]);
+  }
+  if(cand.includeEmail === undefined) cand.includeEmail = false;
+  const rowsHTML = rows.map(row => fieldRowHTML(cand, row[0], row[1])).join('') + emailRowHTML(cand);
+
+  const cc = r.cross_check || {};
+  const ct = r.contract_check || {};
+  const dtc = r.document_type_check || {all_match:true, mismatches:[]};
+  const stampCls = statusStampClass(r.overall_status);
+
+  let contractRow = '';
+  if(ct.applicable){
+    const cls = ct.matches_representative === true ? 'match-yes' : (ct.matches_representative === false ? 'match-no' : 'match-unk');
+    contractRow = `<tr><td style="font-weight:600">契約書署名者確認</td><td colspan="3" class="${cls}">署名者: ${ct.signer_name || '-'} ／ 代表者: ${ct.representative_name || '-'}</td></tr>`;
+  }
+
+  let docCheckHTML = '';
+  if(dtc.mismatches && dtc.mismatches.length > 0){
+    const items = dtc.mismatches.map(m => `・${m.expected_label || m.slot_key}: ${m.note || '種類が一致しない可能性があります'}`).join('<br>');
+    docCheckHTML = `<div class="doc-warning">⚠ 添付書類の種類に不一致の可能性があります<br>${items}</div>`;
+  } else {
+    docCheckHTML = `<div class="doc-ok">✓ 添付書類はすべて指定された種類と一致しています</div>`;
+  }
+
+  const wv = r.website_verification || {};
+  let websiteCheckHTML = '';
+  if(cand.websiteCheckNote){
+    websiteCheckHTML = `<div class="doc-warning">⚠ ${cand.websiteCheckNote}</div>`;
+  } else if(wv.実施有無){
+    const wvCls = wv.result === '一致' ? 'doc-ok' : (wv.result === '不一致' ? 'doc-warning' : 'type-mismatch');
+    const wvIcon = wv.result === '一致' ? '🌐✓' : (wv.result === '不一致' ? '🌐⚠' : '🌐');
+    websiteCheckHTML = `<div class="${wvCls}">${wvIcon} 実際のウェブサイト照合: ${wv.result || '確認不可'}（${wv['確認したURL'] || '-'}）${wv.detail ? '・' + wv.detail : ''}</div>`;
+  }
+
+  const dupFieldLabels = { doctor:'医院名・氏名', tel:'電話番号', fax:'FAX番号', address:'住所', license:'免許番号', code:'医療機関コード' };
+  let duplicateCheckHTML = '';
+  if(cand.duplicateChecking){
+    duplicateCheckHTML = `<div class="doc-ok" style="color:var(--ink-soft);background:#F0F1EE;">⏳ 重複取引先を確認中…</div>`;
+  } else if(cand.duplicateCheck){
+    if(cand.duplicateCheck.ok === false){
+      duplicateCheckHTML = `<div class="type-mismatch">⚠ 重複確認中にエラーが発生しました: ${cand.duplicateCheck.error || ''}（<a href="#" onclick="checkDuplicateForCandidate('${cand.id}');return false;">再確認</a>）</div>`;
+    } else if(cand.duplicateCheck.isDuplicate){
+      const labels = (cand.duplicateCheck.matchedFields || []).map(k => dupFieldLabels[k] || k).join('・');
+      const clinicName = cand.duplicateCheck.matchedClinic ? `（既存登録: ${cand.duplicateCheck.matchedClinic}）` : '';
+      duplicateCheckHTML = `<div class="doc-warning">🚩 重複取引先の疑いがあります。一致項目: ${labels}${clinicName}<br>登録前に既存の取引先ではないか必ずご確認ください。</div>`;
+    } else {
+      duplicateCheckHTML = `<div class="doc-ok">✓ スプレッドシート上に一致する既存取引先は見つかりませんでした</div>`;
+    }
+  }
+
+  return `
+    <div class="result">
+      <div class="result-head">
+        <span class="stamp ${stampCls}"><span class="dot"></span>${r.overall_status || '-'}</span>
+        <span class="rate-pill">提出書類 ${r.doc_count_submitted ?? '-'}件 ・ 一致率 ${r.match_rate ?? '-'}%</span>
+      </div>
+      ${duplicateCheckHTML}
+      ${docCheckHTML}
+      ${websiteCheckHTML}
+      ${r.registration_type_note ? `<div class="type-mismatch">${r.registration_type_note}</div>` : ''}
+      <table class="field-table">
+        <thead><tr><th>項目</th><th colspan="3">抽出値</th></tr></thead>
+        <tbody>${rowsHTML}</tbody>
+        <tbody>
+          <tr><td style="font-weight:600">氏名一致</td><td colspan="3" class="${matchClass(cc.name_consistency?.result)}">${cc.name_consistency?.result || '確認不可'} ${cc.name_consistency?.detail ? '・' + cc.name_consistency.detail : ''}</td></tr>
+          <tr><td style="font-weight:600">住所一致</td><td colspan="3" class="${matchClass(cc.address_consistency?.result)}">${cc.address_consistency?.result || '確認不可'} ${cc.address_consistency?.detail ? '・' + cc.address_consistency.detail : ''}</td></tr>
+          ${contractRow}
+        </tbody>
+      </table>
+      <div class="note-box">${r.overall_note || ''}</div>
+    </div>`;
+}
+
+function render(){
+  const el = document.getElementById('cards');
+  el.innerHTML = candidates.map(c => `
+    <div class="card">
+      <div class="card-top">
+        <input class="name-input" placeholder="ユーザー名入力" value="${c.name}"
+          oninput="updateName('${c.id}', this.value)">
+        <button class="remove-btn" onclick="removeCandidate('${c.id}')">削除</button>
+      </div>
+      <input class="memo-input" placeholder="メモ（例: ○○歯科・△△先生・紹介経由 など、待機中でも見分けられるようにメモできます）" value="${c.memo || ''}"
+        oninput="updateMemo('${c.id}', this.value)">
+      <div class="type-row">
+        <div class="type-toggle">
+          <button class="${c.regType==='biz'?'active biz':''}" onclick="setRegType('${c.id}','biz')">歯科（事業者）</button>
+          <button class="${c.regType==='indiv'?'active indiv':''}" onclick="setRegType('${c.id}','indiv')">個人（勤務者）</button>
+        </div>
+        ${c.regType==='biz' ? `
+        <label class="pre-open-chk">
+          <input type="checkbox" ${c.preOpen?'checked':''} onchange="togglePreOpen('${c.id}', this.checked)">
+          開院前歯科
+        </label>` : ''}
+      </div>
+      <div class="doc-grid">
+        ${DOC_TYPES.map(d => docSlotHTML(c,d)).join('')}
+      </div>
+      ${casePanelHTML(c)}
+      <div style="display:flex;align-items:center;">
+        <button class="analyze-btn" ${c.status==='analyzing'?'disabled':''} onclick="analyzeCandidate('${c.id}')">
+          ${c.status==='analyzing' ? '分析中…' : '書類分析する'}
+        </button>
+        ${c.status==='done' ? `<span class="status-msg">分析完了</span>` : ''}
+      </div>
+      ${resultHTML(c)}
+    </div>
+  `).join('') || `<p style="color:var(--ink-soft);font-size:14px;">まだ追加されたユーザーがいません。上の「＋ ユーザー追加」ボタンから始めてください。</p>`;
+
+  const doneCount = candidates.filter(c=>c.status==='done' && (c.result?.match_rate ?? 0) >= 80).length;
+  document.getElementById('exportInfo').textContent =
+    doneCount>0 ? `${doneCount}名分析完了（一致率80%以上） — 出力できます。` : '一致率80%以上で分析完了したユーザーがいません。';
+  document.getElementById('exportBtn').disabled = doneCount===0;
+  document.getElementById('sheetBtn').disabled = doneCount===0;
+  saveCandidatesToStorage();
+}
+
+// ============================================================
+// 브라우저 탭을 닫았다가 다시 열어도 카드 목록(이름/メモ/케이스ID/분석 결과 등)이
+// 유지되도록 localStorage에 저장합니다.
+// 단, 서류 사진의 실제 이미지 데이터(base64)는 용량이 매우 크기 때문에
+// 저장하지 않습니다 — 이미 서버(Drive/スプレッドシート)에는 안전하게 저장되어 있고,
+// 재분석이 필요할 때만 해당 서류를 다시 첨부해주시면 됩니다.
+// ============================================================
+const STORAGE_KEY = 'netra_candidates_v1';
+
+function saveCandidatesToStorage(){
+  try{
+    const lightweight = candidates.map(c => {
+      const filesLight = {};
+      Object.keys(c.files || {}).forEach(k => {
+        const f = c.files[k];
+        // pages(実際の画像データ)は容量が大きいため保存せず、それ以外の情報だけ保存します。
+        filesLight[k] = {
+          name: f.name, bytes: f.bytes, sizeLabel: f.sizeLabel, pageCount: f.pageCount,
+          source: f.source, syncing: false, syncError: f.syncError || false,
+          restoredWithoutData: true
+        };
+      });
+      return { ...c, files: filesLight };
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ seq, candidates: lightweight }));
+  }catch(e){
+    // 저장 실패(용량 초과 등)는 치명적이지 않으므로 조용히 무시합니다.
+  }
+}
+
+function loadCandidatesFromStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(!data || !Array.isArray(data.candidates) || data.candidates.length === 0) return false;
+    candidates = data.candidates;
+    seq = data.seq || candidates.length;
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+function selectedFieldValue(c, label, fallback){
+  const sel = c.fieldSelection && c.fieldSelection[label];
+  if(sel && String(sel.value || '').trim() !== '') return sel.value;
+  return fallback || '';
+}
+
+// 내보내기(스프레드시트 반영/엑셀 다운로드)와 중복 거래처 확인에서 공통으로 쓰는
+// 필드 계산 로직입니다. 화면에 표시되는 값(사용자가 직접 선택/수정한 값 포함)과
+// 항상 동일한 값을 기준으로 판단하도록 하나로 통일했습니다.
+function computeCandidateFields(c){
+  const ne = c.result.netra_export || {};
+  const d = c.result.documents || {};
+  const isBiz = c.regType === 'biz';
+  const doctorFallback = isBiz
+    ? (ne.doctor || d.homepage?.医院名 || d.opening_cert?.医院名 || c.name)
+    : (ne.person_name || d.license?.氏名 || c.name);
+  const doctorField = isBiz
+    ? selectedFieldValue(c, '医院名', doctorFallback)
+    : selectedFieldValue(c, '氏名', doctorFallback);
+  const telField = selectedFieldValue(c, '電話番号', ne.tel_no || '');
+  const faxField = selectedFieldValue(c, 'FAX番号', ne.fax_no || '');
+  const addressField = selectedFieldValue(c, '住所', ne.bill_to || d.homepage?.住所 || d.opening_cert?.住所 || '');
+  const licenseField = selectedFieldValue(c, '免許番号', ne.license_no || d.license?.免許番号 || '');
+  const codeField = selectedFieldValue(c, '医療機関コード', institutionCodeDisplay(c.result));
+  const emailField = c.includeEmail ? (d.business_card?.メールアドレス || ne.email || '') : '';
+  return { isBiz, doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d };
+}
+
+function buildExportRows(){
+  const eligible = candidates.filter(c=>c.status==='done' && c.result && (c.result.match_rate ?? 0) >= 80);
+  const rows = eligible.map(c=>{
+    const f = computeCandidateFields(c);
+    const { isBiz, doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d } = f;
+    return {
+      '登録種別': isBiz ? (c.preOpen ? '歯科（事業者）-開院前' : '歯科（事業者）') : '個人（勤務者）',
+      'CODE': codeField,
+      "Doctor's Code": '',
+      'Doctor': doctorField,
+      'INPUT DATE': new Date().toISOString().slice(0,10),
+      'TEL NO': telField,
+      'FAX': faxField,
+      'AREA': ne.area_sido || '',
+      'CITY': ne.city_sigungu || '',
+      'REG DATE': '',
+      'TAX RATE': '',
+      'IN-CHARGE': '',
+      'STATUS': c.result.overall_status || '',
+      'LICENSE': licenseField,
+      'SPECIALTY': ne.specialty || '歯科',
+      'NETWORK': '',
+      'E-MAIL': emailField,
+      'CELL': '',
+      '(Bill To)': addressField,
+      '(Ship To)': addressField,
+      '(確認用)HP記載メイン住所': d.homepage?.メイン住所 || '',
+      '提出書類数': c.result.doc_count_submitted ?? '',
+      '一致率(%)': c.result.match_rate ?? '',
+      '判定備考': c.result.overall_note || ''
+    };
+  });
+  return { rows, ids: eligible.map(c=>c.id) };
+}
+
+function exportExcel(){
+  const { rows } = buildExportRows();
+  if(rows.length===0){ alert('出力できる分析結果がありません。'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ネトラアップロード');
+  XLSX.writeFile(wb, 'ネトラ_登録検証結果.xlsx');
+}
+
+function exportToSheet(){
+  const { rows, ids } = buildExportRows();
+  if(rows.length===0){ alert('出力できる分析結果がありません。'); return; }
+  const btn = document.getElementById('sheetBtn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '送信中…';
+  gsRun('appendToNetraSheet', rows)
+    .then(function(resp){
+      btn.disabled = false;
+      btn.textContent = originalText;
+      if(resp && resp.ok){
+        alert(`${resp.added}件のデータをスプレッドシートに反映しました。`);
+        // 등록이 성공적으로 반영된 항목은 화면에서 제거합니다.
+        // (다음에 新規登録要請을 다시 눌러도 같은 치과가 중복으로 반영되지 않도록)
+        candidates = candidates.filter(c => !ids.includes(c.id));
+        render();
+      } else {
+        alert('スプレッドシートへの反映に失敗しました: ' + (resp ? resp.error : '不明なエラー'));
+      }
+    })
+    .catch(function(err){
+      btn.disabled = false;
+      btn.textContent = originalText;
+      alert('システム通信エラー: ' + err.message);
+    });
+}
+
+// ============================================================
+// 선생님이 서류를 제출하면, 담당자가 매번 "確認・反映" 버튼을 누르지 않아도
+// 자동으로 알 수 있도록, 약 20초마다 조용히 상태만 가볍게 확인합니다.
+// (파일 내용 자체는 안 받아오고, "제출 여부"만 확인하므로 가볍습니다.
+//  실제 파일 내용을 화면에 반영하는 것은 지금처럼 버튼을 눌러야 합니다.)
+// ============================================================
+async function pollDentistSubmissions(){
+  let anyChange = false;
+  for(const c of candidates){
+    if(!c.caseId) continue;
+    try{
+      const resp = await gsRun('getCaseStatus', c.caseId);
+      if(resp && resp.ok){
+        const dentistKeys = Object.keys(resp.files).filter(k => resp.files[k].source === 'dentist');
+        const prevKeys = c.dentistFilledKeys || [];
+        const changed = dentistKeys.length !== prevKeys.length || dentistKeys.some(k => !prevKeys.includes(k));
+        if(changed) anyChange = true;
+        c.dentistFilledKeys = dentistKeys;
+      }
+    }catch(e){
+      // 자동 확인은 실패해도 조용히 넘어갑니다 (다음 주기에 다시 시도)
+    }
+  }
+  if(anyChange) render();
+}
+setInterval(pollDentistSubmissions, 20000);
+
+if(!loadCandidatesFromStorage()){
+  addCandidate();
+}
+render();
+</script>
+</body>
+</html>
+
+/fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
 :root{
   --bg: #F4F5F1;
   --panel: #FFFFFF;
