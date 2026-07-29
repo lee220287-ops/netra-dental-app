@@ -299,8 +299,10 @@ h1{
 </div>
 </header>
 
-<button class="add-btn" onclick="addCandidate()">＋ ユーザー追加</button>
-<button class="add-btn" style="background:var(--violet);" onclick="openRestoreModal()">↻ 既存ケースを復元</button>
+<div id="toolbarSticky" style="position:sticky;top:0;z-index:40;background:var(--bg);padding:10px 0 12px;margin:0 0 6px;border-bottom:1px solid var(--line);">
+  <button class="add-btn" style="margin:0 8px 0 0;" onclick="addCandidate()">＋ ユーザー追加</button>
+  <button class="add-btn" style="background:var(--violet);margin:0;" onclick="openRestoreModal()">↻ 既存ケースを復元</button>
+</div>
 <div id="cards"></div>
 
 <div id="restoreModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(23,33,30,0.45);z-index:100;align-items:center;justify-content:center;padding:20px;">
@@ -312,6 +314,8 @@ h1{
     <div style="padding:8px 8px;overflow-y:auto;" id="restoreModalList"></div>
   </div>
 </div>
+
+<div id="saveToast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.25);">✓ 保存しました</div>
 
 <div class="export-bar">
   <span class="txt" id="exportInfo">分析完了したユーザーがいません。</span>
@@ -389,12 +393,17 @@ async function openRestoreModal(){
       listEl.innerHTML = '<div style="padding:24px;color:var(--ink-soft);text-align:center;">復元できる待機中のケースはありません（すべて画面に表示済みか、削除済みです）。</div>';
       return;
     }
-    listEl.innerHTML = _restoreCaseCache.map((x, idx) => `
+    listEl.innerHTML = _restoreCaseCache.map((x, idx) => {
+      const hasName = x.name && x.name.trim() !== '';
+      const hasMemo = x.memo && x.memo.trim() !== '';
+      const mainLabel = hasName ? escapeHtml(x.name) : (hasMemo ? escapeHtml(x.memo) : '（名前・メモ未入力）');
+      const subLabel = (hasName && hasMemo) ? `<span style="font-weight:400;color:var(--ink-soft);font-size:12.5px;">・${escapeHtml(x.memo)}</span>` : '';
+      return `
       <div class="restore-item" onclick="restoreCaseFromList(${idx})">
-        <div style="font-weight:700;">${escapeHtml(x.name) || '（名前未入力）'}${x.memo ? ` <span style="font-weight:400;color:var(--ink-soft);font-size:12.5px;">・${escapeHtml(x.memo)}</span>` : ''}</div>
-        <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${x.regType==='biz' ? '歯科（事業者）' : '個人（勤務者）'}${x.preOpen ? '・開院前' : ''} ・ 最終更新: ${x.updatedAt ? new Date(x.updatedAt).toLocaleString('ja-JP') : '-'}</div>
-      </div>
-    `).join('');
+        <div style="font-weight:700;">${mainLabel} ${subLabel}</div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${x.regType==='biz' ? '歯科（事業者）' : '個人（勤務者）'}${x.preOpen ? '・開院前' : ''} ・ 最終更新: ${x.updatedAt ? new Date(x.updatedAt).toLocaleString('ja-JP') : '-'} ・ ケースID: ${escapeHtml(x.caseId)}</div>
+      </div>`;
+    }).join('');
   }catch(e){
     listEl.innerHTML = `<div style="padding:24px;color:var(--red);">通信エラー: ${escapeHtml(e.message)}</div>`;
   }
@@ -442,7 +451,7 @@ async function restoreCaseFromList(idx){
 async function removeCandidate(id){
   const c = candidates.find(x=>x.id===id);
   if(!c) return;
-  const label = c.memo ? `${c.name || '（名前未入力）'}（${c.memo}）` : (c.name || 'このユーザー');
+  const label = c.name ? (c.memo ? `${c.name}（${c.memo}）` : c.name) : (c.memo || 'このユーザー');
   const confirmed = confirm(
     `${label} を削除します。\n\n` +
     `・この操作は取り消せません。\n` +
@@ -467,10 +476,30 @@ function updateMemo(id, val){
   if(c) c.memo = val;
 }
 // 이름／メモ는 입력할 때마다 서버에 보내면 요청이 너무 많아지므로,
-// 입력창에서 포커스가 벗어날 때(입력을 마쳤을 때)만 서버에 반영합니다.
+// 입력창에서 포커스가 벗어나거나 Enterキーを押した時にだけ서버に反映します。
 function syncCaseMeta(id){
   const c = candidates.find(x=>x.id===id);
-  if(c && c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name, c.memo).catch(()=>{});
+  if(!c || !c.caseId) return;
+  gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name, c.memo)
+    .then(()=> showSaveToast())
+    .catch(()=>{ showSaveToast('⚠ 保存に失敗しました。通信環境をご確認ください。', true); });
+}
+// Enterキーで入力を確定＆保存します（Shift+Enterなどは不要な単純入力なので普通のEnterのみ対象）。
+function saveOnEnter(event){
+  if(event.key === 'Enter'){
+    event.preventDefault();
+    event.target.blur();
+  }
+}
+let _saveToastTimer = null;
+function showSaveToast(msg, isError){
+  const el = document.getElementById('saveToast');
+  if(!el) return;
+  el.textContent = msg || '✓ 保存しました';
+  el.style.background = isError ? 'var(--red)' : 'var(--ink)';
+  el.style.display = 'block';
+  clearTimeout(_saveToastTimer);
+  _saveToastTimer = setTimeout(()=>{ el.style.display = 'none'; }, isError ? 3000 : 1400);
 }
 function setRegType(id, type){
   const c = candidates.find(x=>x.id===id);
@@ -1181,11 +1210,11 @@ function render(){
     <div class="card">
       <div class="card-top">
         <input class="name-input" placeholder="ユーザー名入力" value="${c.name}"
-          oninput="updateName('${c.id}', this.value)" onblur="syncCaseMeta('${c.id}')">
+          oninput="updateName('${c.id}', this.value)" onblur="syncCaseMeta('${c.id}')" onkeydown="saveOnEnter(event)">
         <button class="remove-btn" onclick="removeCandidate('${c.id}')">削除</button>
       </div>
       <input class="memo-input" placeholder="メモ（例: ○○歯科・△△先生・紹介経由 など、待機中でも見分けられるようにメモできます）" value="${c.memo || ''}"
-        oninput="updateMemo('${c.id}', this.value)" onblur="syncCaseMeta('${c.id}')">
+        oninput="updateMemo('${c.id}', this.value)" onblur="syncCaseMeta('${c.id}')" onkeydown="saveOnEnter(event)">
       <div class="type-row">
         <div class="type-toggle">
           <button class="${c.regType==='biz'?'active biz':''}" onclick="setRegType('${c.id}','biz')">歯科（事業者）</button>
