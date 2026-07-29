@@ -795,6 +795,7 @@ function casePanelHTML(cand){
   const pendingCount = (cand.dentistFilledKeys || []).filter(k => !cand.files[k] || cand.files[k].source !== 'dentist').length;
   return `
     <div class="case-panel">
+      ${pendingCount > 0 ? `<div class="case-status-note" style="background:var(--amber-soft);color:#7A5111;border:1px solid #E8CE9C;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-weight:700;">🔔 先生から書類が届いています（${pendingCount}件・未反映）。下のボタンで反映してください。</div>` : ''}
       <div class="case-link-row">
         <input class="case-link-input" readonly value="${link}" onclick="this.select()">
         <button class="case-btn" onclick="copyCaseLink('${cand.id}')">リンクをコピー</button>
@@ -804,7 +805,7 @@ function casePanelHTML(cand){
         </button>
       </div>
       ${cand.showCaseQr ? `<div class="case-qr"><img src="${qrSrc}" alt="QRコード" width="180" height="180"></div>` : ''}
-      <div class="case-status-note">このリンクを先生に送るか、QRコードを読み取っていただくと、先生ご本人のスマホから直接書類を提出できます（担当者がここで添付した内容は先生には表示されません）。ここでアップロードした書類も自動的にこのケースに同期されます。</div>
+      <div class="case-status-note">このリンクを先生に送るか、QRコードを読み取っていただくと、先生ご本人のスマホから直接書類を提出できます（担当者がここで添付した内容は先生には表示されません）。ここでアップロードした書類も自動的にこのケースに同期されます。書類が届くと、上記のバッジで自動的にお知らせします（約20秒ごとに自動確認）。</div>
     </div>`;
 }
 
@@ -1185,6 +1186,33 @@ function exportToSheet(){
       alert('システム通信エラー: ' + err.message);
     });
 }
+
+// ============================================================
+// 선생님이 서류를 제출하면, 담당자가 매번 "確認・反映" 버튼을 누르지 않아도
+// 자동으로 알 수 있도록, 약 20초마다 조용히 상태만 가볍게 확인합니다.
+// (파일 내용 자체는 안 받아오고, "제출 여부"만 확인하므로 가볍습니다.
+//  실제 파일 내용을 화면에 반영하는 것은 지금처럼 버튼을 눌러야 합니다.)
+// ============================================================
+async function pollDentistSubmissions(){
+  let anyChange = false;
+  for(const c of candidates){
+    if(!c.caseId) continue;
+    try{
+      const resp = await gsRun('getCaseStatus', c.caseId);
+      if(resp && resp.ok){
+        const dentistKeys = Object.keys(resp.files).filter(k => resp.files[k].source === 'dentist');
+        const prevKeys = c.dentistFilledKeys || [];
+        const changed = dentistKeys.length !== prevKeys.length || dentistKeys.some(k => !prevKeys.includes(k));
+        if(changed) anyChange = true;
+        c.dentistFilledKeys = dentistKeys;
+      }
+    }catch(e){
+      // 자동 확인은 실패해도 조용히 넘어갑니다 (다음 주기에 다시 시도)
+    }
+  }
+  if(anyChange) render();
+}
+setInterval(pollDentistSubmissions, 20000);
 
 addCandidate();
 render();
