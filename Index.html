@@ -105,6 +105,8 @@ h1{
 }
 .memo-input:focus{outline:none;border-color:var(--teal);background:#fff;}
 .memo-input::placeholder{color:#A6ADA3;}
+.restore-item{padding:12px 12px;border-radius:8px;cursor:pointer;border:1px solid transparent;}
+.restore-item:hover{background:var(--violet-soft);border-color:#D3C9EA;}
 .remove-btn{
   background:none;border:none;color:var(--ink-soft);cursor:pointer;
   font-size:13px;padding:4px 8px;border-radius:6px;
@@ -298,8 +300,18 @@ h1{
 </header>
 
 <button class="add-btn" onclick="addCandidate()">＋ ユーザー追加</button>
-<button class="add-btn" style="background:var(--violet);" onclick="reloadExistingCase()">↻ 既存ケースを復元</button>
+<button class="add-btn" style="background:var(--violet);" onclick="openRestoreModal()">↻ 既存ケースを復元</button>
 <div id="cards"></div>
+
+<div id="restoreModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(23,33,30,0.45);z-index:100;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <div style="padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;">既存ケースを復元</div>
+      <button onclick="closeRestoreModal()" style="border:none;background:none;font-size:20px;color:var(--ink-soft);cursor:pointer;line-height:1;">×</button>
+    </div>
+    <div style="padding:8px 8px;overflow-y:auto;" id="restoreModalList"></div>
+  </div>
+</div>
 
 <div class="export-bar">
   <span class="txt" id="exportInfo">分析完了したユーザーがいません。</span>
@@ -335,7 +347,7 @@ async function addCandidate(){
   candidates.push(c);
   render();
   try{
-    const resp = await gsRun('createCase', c.regType, c.preOpen);
+    const resp = await gsRun('createCase', c.regType, c.preOpen, c.memo);
     if(resp && resp.ok){
       c.caseId = resp.caseId;
       c.caseReady = true;
@@ -352,27 +364,58 @@ async function addCandidate(){
 // 화면에서 카드가 사라졌더라도(새로고침 전 데이터, 다른 기기 등), 케이스IDまたは
 // 先生用リンクの全体を入力すれば、そのケースをもう一度カードとして画面に呼び戻せます。
 // 実際のデータ（スプレッドシート／Drive）は消えていないので、これは"復旧"のための機能です。
-async function reloadExistingCase(){
-  const input = prompt('復元したいケースID、または先生に送ったリンクの全体を貼り付けてください:');
-  if(!input) return;
-  const m = input.match(/caseId=([a-zA-Z0-9]+)/);
-  const caseId = (m ? m[1] : input).trim();
-  if(!caseId) return;
+function escapeHtml(s){
+  return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
 
-  if(candidates.some(c => c.caseId === caseId)){
+// 화면에서 카드가 사라졌더라도(새로고침 전 데이터, 다른 기기 등), 대기 중인 케이스
+// 목록을 보여주고 클릭 한 번으로 다시 카드로 불러올 수 있게 합니다.
+// 実際のデータ（スプレッドシート／Drive）は消えていないので、これは"復旧"のための機能です。
+let _restoreCaseCache = [];
+
+async function openRestoreModal(){
+  const listEl = document.getElementById('restoreModalList');
+  listEl.innerHTML = '<div style="padding:24px;color:var(--ink-soft);text-align:center;">読み込み中…</div>';
+  document.getElementById('restoreModalOverlay').style.display = 'flex';
+  try{
+    const resp = await gsRun('listOpenCases');
+    if(!resp || !resp.ok){
+      listEl.innerHTML = `<div style="padding:24px;color:var(--red);">取得に失敗しました: ${escapeHtml(resp ? resp.error : '不明なエラー')}</div>`;
+      return;
+    }
+    const loadedIds = new Set(candidates.map(c=>c.caseId));
+    _restoreCaseCache = resp.cases.filter(x => !loadedIds.has(x.caseId));
+    if(_restoreCaseCache.length === 0){
+      listEl.innerHTML = '<div style="padding:24px;color:var(--ink-soft);text-align:center;">復元できる待機中のケースはありません（すべて画面に表示済みか、削除済みです）。</div>';
+      return;
+    }
+    listEl.innerHTML = _restoreCaseCache.map((x, idx) => `
+      <div class="restore-item" onclick="restoreCaseFromList(${idx})">
+        <div style="font-weight:700;">${escapeHtml(x.name) || '（名前未入力）'}${x.memo ? ` <span style="font-weight:400;color:var(--ink-soft);font-size:12.5px;">・${escapeHtml(x.memo)}</span>` : ''}</div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${x.regType==='biz' ? '歯科（事業者）' : '個人（勤務者）'}${x.preOpen ? '・開院前' : ''} ・ 最終更新: ${x.updatedAt ? new Date(x.updatedAt).toLocaleString('ja-JP') : '-'}</div>
+      </div>
+    `).join('');
+  }catch(e){
+    listEl.innerHTML = `<div style="padding:24px;color:var(--red);">通信エラー: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function closeRestoreModal(){
+  document.getElementById('restoreModalOverlay').style.display = 'none';
+}
+
+async function restoreCaseFromList(idx){
+  const item = _restoreCaseCache[idx];
+  if(!item) return;
+  closeRestoreModal();
+  if(candidates.some(c => c.caseId === item.caseId)){
     alert('このケースはすでに画面に表示されています。');
     return;
   }
-
   try{
-    const infoResp = await gsRun('getCaseInfo', caseId);
-    if(!infoResp || !infoResp.ok){
-      alert('見つかりませんでした: ' + (infoResp ? infoResp.error : '不明なエラー'));
-      return;
-    }
     let filesMeta = {};
     try{
-      const statusResp = await gsRun('getCaseStatus', caseId);
+      const statusResp = await gsRun('getCaseStatus', item.caseId);
       if(statusResp && statusResp.ok) filesMeta = statusResp.files || {};
     }catch(e){ /* 파일 목록 없이도 카드 자체는 복원 진행 */ }
 
@@ -383,24 +426,19 @@ async function reloadExistingCase(){
 
     const id = 'c' + (seq++);
     const c = {
-      id, name: infoResp.name || '', memo: '（既存ケースを復元）',
-      regType: infoResp.regType || 'biz', preOpen: !!infoResp.preOpen,
+      id, name: item.name || '', memo: item.memo || '',
+      regType: item.regType || 'biz', preOpen: !!item.preOpen,
       includeEmail:false, files: filesLight, status:'idle', result:null, error:null,
-      caseId: caseId, caseReady:true, showDentistPanel:false,
+      caseId: item.caseId, caseReady:true, showDentistPanel:false,
       dentistFilledKeys: Object.keys(filesMeta).filter(k => filesMeta[k].source === 'dentist')
     };
     candidates.push(c);
     render();
-    alert('ケースを復元しました。書類の内容を画面に反映するには「先生の提出を確認・反映」を押してください。（担当者が添付した書類も、再度添付し直せば分析に使えます）');
   }catch(e){
     alert('復元中にエラーが発生しました: ' + e.message);
   }
 }
 
-function updateMemo(id, val){
-  const c = candidates.find(x=>x.id===id);
-  if(c) c.memo = val;
-}
 async function removeCandidate(id){
   const c = candidates.find(x=>x.id===id);
   if(!c) return;
@@ -424,11 +462,21 @@ function updateName(id, val){
   const c = candidates.find(x=>x.id===id);
   if(c) c.name = val;
 }
+function updateMemo(id, val){
+  const c = candidates.find(x=>x.id===id);
+  if(c) c.memo = val;
+}
+// 이름／メモ는 입력할 때마다 서버에 보내면 요청이 너무 많아지므로,
+// 입력창에서 포커스가 벗어날 때(입력을 마쳤을 때)만 서버에 반영합니다.
+function syncCaseMeta(id){
+  const c = candidates.find(x=>x.id===id);
+  if(c && c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name, c.memo).catch(()=>{});
+}
 function setRegType(id, type){
   const c = candidates.find(x=>x.id===id);
   if(c){
     c.regType = type;
-    if(c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name).catch(()=>{});
+    if(c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name, c.memo).catch(()=>{});
   }
   render();
 }
@@ -436,7 +484,7 @@ function togglePreOpen(id, checked){
   const c = candidates.find(x=>x.id===id);
   if(c){
     c.preOpen = checked;
-    if(c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name).catch(()=>{});
+    if(c.caseId) gsRun('updateCaseMeta', c.caseId, c.regType, c.preOpen, c.name, c.memo).catch(()=>{});
   }
 }
 function toggleIncludeEmail(id, checked){
@@ -1133,11 +1181,11 @@ function render(){
     <div class="card">
       <div class="card-top">
         <input class="name-input" placeholder="ユーザー名入力" value="${c.name}"
-          oninput="updateName('${c.id}', this.value)">
+          oninput="updateName('${c.id}', this.value)" onblur="syncCaseMeta('${c.id}')">
         <button class="remove-btn" onclick="removeCandidate('${c.id}')">削除</button>
       </div>
       <input class="memo-input" placeholder="メモ（例: ○○歯科・△△先生・紹介経由 など、待機中でも見分けられるようにメモできます）" value="${c.memo || ''}"
-        oninput="updateMemo('${c.id}', this.value)">
+        oninput="updateMemo('${c.id}', this.value)" onblur="syncCaseMeta('${c.id}')">
       <div class="type-row">
         <div class="type-toggle">
           <button class="${c.regType==='biz'?'active biz':''}" onclick="setRegType('${c.id}','biz')">歯科（事業者）</button>
@@ -1349,5 +1397,4 @@ render();
 </script>
 </body>
 </html>
-
 
