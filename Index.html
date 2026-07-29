@@ -298,6 +298,7 @@ h1{
 </header>
 
 <button class="add-btn" onclick="addCandidate()">＋ ユーザー追加</button>
+<button class="add-btn" style="background:var(--violet);" onclick="reloadExistingCase()">↻ 既存ケースを復元</button>
 <div id="cards"></div>
 
 <div class="export-bar">
@@ -348,6 +349,54 @@ async function addCandidate(){
   }
   render();
 }
+// 화면에서 카드가 사라졌더라도(새로고침 전 데이터, 다른 기기 등), 케이스IDまたは
+// 先生用リンクの全体を入力すれば、そのケースをもう一度カードとして画面に呼び戻せます。
+// 実際のデータ（スプレッドシート／Drive）は消えていないので、これは"復旧"のための機能です。
+async function reloadExistingCase(){
+  const input = prompt('復元したいケースID、または先生に送ったリンクの全体を貼り付けてください:');
+  if(!input) return;
+  const m = input.match(/caseId=([a-zA-Z0-9]+)/);
+  const caseId = (m ? m[1] : input).trim();
+  if(!caseId) return;
+
+  if(candidates.some(c => c.caseId === caseId)){
+    alert('このケースはすでに画面に表示されています。');
+    return;
+  }
+
+  try{
+    const infoResp = await gsRun('getCaseInfo', caseId);
+    if(!infoResp || !infoResp.ok){
+      alert('見つかりませんでした: ' + (infoResp ? infoResp.error : '不明なエラー'));
+      return;
+    }
+    let filesMeta = {};
+    try{
+      const statusResp = await gsRun('getCaseStatus', caseId);
+      if(statusResp && statusResp.ok) filesMeta = statusResp.files || {};
+    }catch(e){ /* 파일 목록 없이도 카드 자체는 복원 진행 */ }
+
+    const filesLight = {};
+    Object.keys(filesMeta).forEach(k => {
+      filesLight[k] = { name:'(復元済み・内容確認は下のボタンから)', pageCount:1, bytes:0, sizeLabel:'-', source: filesMeta[k].source, restoredWithoutData:true };
+    });
+
+    const id = 'c' + (seq++);
+    const c = {
+      id, name: infoResp.name || '', memo: '（既存ケースを復元）',
+      regType: infoResp.regType || 'biz', preOpen: !!infoResp.preOpen,
+      includeEmail:false, files: filesLight, status:'idle', result:null, error:null,
+      caseId: caseId, caseReady:true, showDentistPanel:false,
+      dentistFilledKeys: Object.keys(filesMeta).filter(k => filesMeta[k].source === 'dentist')
+    };
+    candidates.push(c);
+    render();
+    alert('ケースを復元しました。書類の内容を画面に反映するには「先生の提出を確認・反映」を押してください。（担当者が添付した書類も、再度添付し直せば分析に使えます）');
+  }catch(e){
+    alert('復元中にエラーが発生しました: ' + e.message);
+  }
+}
+
 function updateMemo(id, val){
   const c = candidates.find(x=>x.id===id);
   if(c) c.memo = val;
@@ -1300,4 +1349,3 @@ render();
 </script>
 </body>
 </html>
-
