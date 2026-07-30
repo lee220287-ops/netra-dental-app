@@ -1115,21 +1115,35 @@ function docSlotHTML(cand, doc){
       ${filled ? `<div class="doc-filename">📄 ${f.name}${f.pageCount>1 ? ` (${f.pageCount}ページ)` : ''} <span style="color:var(--ink-soft)">・${f.sizeLabel}</span></div>` : `<div class="doc-empty">${emptyMessage}</div>`}
       ${f && f.syncing ? `<div class="doc-mismatch-tag" style="color:var(--ink-soft)">⏳ 同期中…</div>` : ''}
       ${f && f.syncError ? `<div class="doc-mismatch-tag">⚠ ケースへの同期に失敗しました</div>` : ''}
-      ${f && f.restoredWithoutData ? `<div class="doc-mismatch-tag" style="color:var(--ink-soft)">↻ 保存済み（再解析する場合は再度添付してください）</div>` : ''}
+      ${f && f.restoredWithoutData ? `<div class="doc-mismatch-tag" style="color:var(--ink-soft)">✓ サーバーには保存済みです（画像はこの画面には再表示されません。AIで再解析する場合のみ、お手数ですが再度添付してください）</div>` : ''}
       ${mismatchNote ? `<div class="doc-mismatch-tag">⚠ 書類の種類が一致しない可能性</div>` : ''}
       <input type="file" id="file-${cand.id}-${doc.key}" accept=".pdf,image/*" ${isCustomerOnly ? 'disabled' : ''}
         onchange="handleFile('${cand.id}','${doc.key}', this.files[0])">
     </div>`;
 }
 
-function removeFile(candId, docKey, event){
+async function removeFile(candId, docKey, event){
   if(event){ event.stopPropagation(); }
   const c = candidates.find(x=>x.id===candId);
-  if(c && c.files[docKey]){
-    delete c.files[docKey];
-    render();
-    if(c.caseId){
-      gsRun('deleteCaseFile', c.caseId, docKey).catch(()=>{});
+  if(!c || !c.files[docKey]) return;
+
+  const backup = c.files[docKey];
+  delete c.files[docKey];
+  render();
+
+  if(c.caseId){
+    try{
+      const resp = await gsRun('deleteCaseFile', c.caseId, docKey);
+      if(!resp || !resp.ok){
+        // サーバー側の削除に失敗した場合は、画面上も元に戻し、はっきりお知らせします。
+        c.files[docKey] = backup;
+        render();
+        alert('サーバー側の削除に失敗したため、画面上も元に戻しました。もう一度お試しいただくか、通信環境をご確認ください。');
+      }
+    }catch(e){
+      c.files[docKey] = backup;
+      render();
+      alert('サーバーとの通信エラーにより削除できませんでした。画面上も元に戻しました: ' + e.message);
     }
   }
 }
