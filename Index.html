@@ -292,6 +292,19 @@ h1{
     <button onclick="googleLogout()" style="border:1px solid var(--line);background:#fff;border-radius:6px;padding:6px 12px;font-size:12.5px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;">ログアウト</button>
   </div>
 </div>
+
+<div id="employeeIdModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(23,33,30,0.55);z-index:200;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;margin-bottom:8px;">初回ログインのご登録</div>
+    <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0 0 16px;">他の担当者に個人のGoogleアカウントが見えないよう、社員番号とお名前をご登録ください（最初の1回だけです）。</p>
+    <label style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:4px;">お名前</label>
+    <input id="empIdNameInput" type="text" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:7px;font-size:14px;margin-bottom:14px;font-family:'Noto Sans JP',sans-serif;">
+    <label style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:4px;">社員番号</label>
+    <input id="empIdInput" type="text" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:7px;font-size:14px;margin-bottom:18px;font-family:'Noto Sans JP',sans-serif;" placeholder="例: E12345">
+    <button onclick="submitEmployeeId()" class="add-btn" style="width:100%;margin:0;">登録して始める</button>
+  </div>
+</div>
+
 <div class="wrap">
 <header>
 <span class="eyebrow">Netra · Registration QA</span>
@@ -496,21 +509,72 @@ function renderRestoreList(){
     return;
   }
   listEl.innerHTML = _restoreCaseCache.map((x, idx) => {
+    const isMine = x.createdBy === currentUserEmail;
     const hasName = x.name && x.name.trim() !== '';
     const hasMemo = x.memo && x.memo.trim() !== '';
     const mainLabel = hasName ? escapeHtml(x.name) : (hasMemo ? escapeHtml(x.memo) : '（名前・メモ未入力）');
     const subLabel = (hasName && hasMemo) ? `<span style="font-weight:400;color:var(--ink-soft);font-size:12.5px;">・${escapeHtml(x.memo)}</span>` : '';
-    const ownerLabel = x.createdBy ? `・作成者: ${escapeHtml(x.createdBy)}` : '';
+    // 개인 Googleアカウント(メール)は他の担当者には表示せず、社員番号／名前のみ表示します。
+    const ownerLabel = isMine ? '' : `・作成者: ${escapeHtml(x.createdByDisplay || '不明')}`;
+    const lockBadge = isMine ? '' : `<span style="font-size:10.5px;font-weight:700;color:var(--violet);">🔒 表示権限が必要な場合があります</span>`;
     return `
-      <div class="restore-item" onclick="restoreCaseFromList(${idx})">
+      <div class="restore-item" onclick="handleRestoreItemClick(${idx})">
         <div style="font-weight:700;">${mainLabel} ${subLabel}</div>
         <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${categoryLabel(x.regType)} ・ 最終更新: ${x.updatedAt ? new Date(x.updatedAt).toLocaleString('ja-JP') : '-'} ・ ケースID: ${escapeHtml(x.caseId)}${ownerLabel}</div>
+        ${lockBadge ? `<div style="margin-top:3px;">${lockBadge}</div>` : ''}
       </div>`;
   }).join('');
 }
 
 function closeRestoreModal(){
   document.getElementById('restoreModalOverlay').style.display = 'none';
+}
+
+// 목록에서 항목을 클릭했을 때: 본인 케이스면 바로 복원, 타인 케이스면 표시 권한을 먼저 확인합니다.
+async function handleRestoreItemClick(idx){
+  const item = _restoreCaseCache[idx];
+  if(!item) return;
+  if(item.createdBy === currentUserEmail){
+    restoreCaseFromList(idx);
+    return;
+  }
+  try{
+    const access = await gsRun('checkCaseAccess', item.caseId, currentUserEmail);
+    if(access && access.ok && access.hasAccess){
+      restoreCaseFromList(idx);
+      return;
+    }
+    // 권한이 없는 경우: 신청 여부를 물어봅니다.
+    if(access && access.status === 'pending'){
+      alert('すでにこのケースの表示権限を申請済みです。管理者の承認をお待ちください。');
+      return;
+    }
+    if(access && access.status === 'rejected'){
+      const retry = confirm('このケースの表示権限は却下されています。あらためて申請しますか？');
+      if(!retry) return;
+    }
+    if(access && access.status === 'expired'){
+      const retry = confirm('以前の表示権限は期限切れです。あらためて申請しますか？');
+      if(!retry) return;
+    }
+    const memo = prompt('表示権限の申請理由（メモ）を入力してください（管理者に送信されます）:', '');
+    if(memo === null) return; // 취소
+    closeRestoreModal();
+    const reqResp = await gsRun('requestCaseAccess', item.caseId, currentUserEmail, currentUserEmployeeId, currentUserName, memo, item.createdByDisplay || '');
+    if(reqResp && reqResp.ok){
+      if(reqResp.alreadyGranted){
+        alert('すでに表示権限があります。もう一度「既存ケースを復元」からお試しください。');
+      } else if(reqResp.alreadyPending){
+        alert('すでに申請済みです。管理者の承認をお待ちください。');
+      } else {
+        alert('表示権限を申請しました。管理者の承認をお待ちください（承認されると数日間閲覧できるようになります）。');
+      }
+    } else {
+      alert('申請に失敗しました: ' + (reqResp ? reqResp.error : '不明なエラー'));
+    }
+  }catch(e){
+    alert('権限確認中にエラーが発生しました: ' + e.message);
+  }
 }
 
 async function restoreCaseFromList(idx){
@@ -848,6 +912,7 @@ const GOOGLE_USER_STORAGE_KEY = 'netra_google_user_v1';
 
 let currentUserEmail = '';
 let currentUserName = '';
+let currentUserEmployeeId = '';
 
 function updateLoginUI(){
   const statusText = document.getElementById('loginStatusText');
@@ -857,11 +922,53 @@ function updateLoginUI(){
     statusText.style.display = 'none';
     signInBtn.style.display = 'none';
     loggedInBox.style.display = 'flex';
-    document.getElementById('loggedInName').textContent = `👤 ${currentUserName}（${currentUserEmail}）`;
+    document.getElementById('loggedInName').textContent = `👤 ${currentUserName}（社員番号: ${currentUserEmployeeId || '-'} / ${currentUserEmail}）`;
   } else {
     statusText.style.display = 'block';
     signInBtn.style.display = 'block';
     loggedInBox.style.display = 'none';
+  }
+}
+
+function persistLoginCache(){
+  try{ localStorage.setItem(GOOGLE_USER_STORAGE_KEY, JSON.stringify({email:currentUserEmail, name:currentUserName, employeeId:currentUserEmployeeId})); }catch(e){}
+}
+
+function finishLoginFlow(){
+  persistLoginCache();
+  updateLoginUI();
+}
+
+// 첫 로그인 시 사원번호를 입력받습니다. 이미 등록된 사용자라면 이 화면은 뜨지 않습니다.
+function showEmployeeIdModal(){
+  document.getElementById('empIdNameInput').value = currentUserName || '';
+  document.getElementById('empIdInput').value = '';
+  document.getElementById('employeeIdModalOverlay').style.display = 'flex';
+}
+
+async function submitEmployeeId(){
+  const employeeId = document.getElementById('empIdInput').value.trim();
+  const name = document.getElementById('empIdNameInput').value.trim();
+  if(!employeeId){
+    alert('社員番号を入力してください。');
+    return;
+  }
+  if(!name){
+    alert('お名前を入力してください。');
+    return;
+  }
+  try{
+    const resp = await gsRun('registerUser', currentUserEmail, employeeId, name);
+    if(!resp || !resp.ok){
+      alert('登録に失敗しました: ' + (resp ? resp.error : '不明なエラー'));
+      return;
+    }
+    currentUserEmployeeId = employeeId;
+    currentUserName = name;
+    document.getElementById('employeeIdModalOverlay').style.display = 'none';
+    finishLoginFlow();
+  }catch(e){
+    alert('登録中にエラーが発生しました: ' + e.message);
   }
 }
 
@@ -874,8 +981,15 @@ function handleGoogleLogin(response){
       }
       currentUserEmail = resp.email;
       currentUserName = resp.name;
-      try{ localStorage.setItem(GOOGLE_USER_STORAGE_KEY, JSON.stringify({email:resp.email, name:resp.name})); }catch(e){}
-      updateLoginUI();
+      return gsRun('getUserInfo', currentUserEmail).then(info => {
+        if(info && info.ok && info.registered){
+          currentUserEmployeeId = info.employeeId;
+          currentUserName = info.name || currentUserName;
+          finishLoginFlow();
+        } else {
+          showEmployeeIdModal(); // 처음 로그인 → 사원번호 등록 필요
+        }
+      });
     })
     .catch(err => alert('ログイン確認中にエラーが発生しました: ' + err.message));
 }
@@ -883,6 +997,7 @@ function handleGoogleLogin(response){
 function googleLogout(){
   currentUserEmail = '';
   currentUserName = '';
+  currentUserEmployeeId = '';
   try{ localStorage.removeItem(GOOGLE_USER_STORAGE_KEY); }catch(e){}
   if(window.google && google.accounts && google.accounts.id){
     google.accounts.id.disableAutoSelect();
@@ -896,10 +1011,23 @@ function initGoogleSignIn(){
     const cached = localStorage.getItem(GOOGLE_USER_STORAGE_KEY);
     if(cached){
       const u = JSON.parse(cached);
-      currentUserEmail = u.email; currentUserName = u.name;
+      currentUserEmail = u.email; currentUserName = u.name; currentUserEmployeeId = u.employeeId || '';
     }
   }catch(e){}
   updateLoginUI();
+
+  // 캐시된 사원번호가 없으면(예: 예전 버전에서 로그인한 경우) 서버에서 다시 확인합니다.
+  if(currentUserEmail && !currentUserEmployeeId){
+    gsRun('getUserInfo', currentUserEmail).then(info => {
+      if(info && info.ok && info.registered){
+        currentUserEmployeeId = info.employeeId;
+        currentUserName = info.name || currentUserName;
+        finishLoginFlow();
+      } else if(info && info.ok){
+        showEmployeeIdModal();
+      }
+    }).catch(()=>{});
+  }
 
   if(!window.google || !google.accounts || !google.accounts.id) return;
   google.accounts.id.initialize({
