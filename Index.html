@@ -133,6 +133,8 @@ h1{
 .doc-slot.mismatch{border-style:solid;border-color:var(--red);background:var(--red-soft);}
 .doc-slot.drag{border-color:var(--teal);background:var(--teal-soft);}
 .doc-slot.dim{opacity:.45;}
+.doc-slot.locked{cursor:not-allowed;background:#F0F1EE;border-style:dashed;}
+.doc-slot.locked .doc-empty{color:var(--violet);font-weight:600;}
 .doc-slot input{display:none;}
 .doc-remove-btn{
   position:absolute;top:6px;right:6px;
@@ -455,6 +457,10 @@ let _restoreCasesAll = [];
 let _restoreShowAll = false;
 
 async function openRestoreModal(){
+  if(!currentUserEmail){
+    alert('先にGoogleでログインしてください（画面上部のボタンから）。ログインしていない状態では、誤って他の担当者のケースが表示されるのを防ぐため、復元一覧を開けません。');
+    return;
+  }
   const listEl = document.getElementById('restoreModalList');
   listEl.innerHTML = '<div style="padding:24px;color:var(--ink-soft);text-align:center;">読み込み中…</div>';
   document.getElementById('restoreModalOverlay').style.display = 'flex';
@@ -904,6 +910,23 @@ function initGoogleSignIn(){
 }
 window.addEventListener('load', initGoogleSignIn);
 
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+// Gemini 서버가 일시적으로 混雑（503 UNAVAILABLE）している場合、少し待って自動的に再試行します。
+async function callGeminiWithRetry(payload, maxRetries){
+  maxRetries = maxRetries || 2;
+  let lastResp = null;
+  for(let attempt = 0; attempt <= maxRetries; attempt++){
+    const resp = await gsRun('callGoogleGeminiAPI', payload);
+    lastResp = resp;
+    const isOverloaded = resp && !resp.ok && (resp.status === 503 || (resp.text && resp.text.indexOf('UNAVAILABLE') !== -1));
+    if(resp && resp.ok) return resp;
+    if(!isOverloaded) return resp; // 과부하가 아닌 다른 에러는 즉시 반환
+    if(attempt < maxRetries) await sleep(2000 * (attempt + 1)); // 2초, 4초 간격으로 재시도
+  }
+  return lastResp;
+}
+
 async function analyzeCandidate(id){
   const c = candidates.find(x=>x.id===id);
   if(!c) return;
@@ -997,7 +1020,7 @@ async function analyzeCandidate(id){
   }
 
   try{
-    const resp = await gsRun('callGoogleGeminiAPI', {contents:[{parts:parts}]});
+    const resp = await callGeminiWithRetry({contents:[{parts:parts}]});
     if(!resp.ok){
       c.status = 'error';
       c.error = `AI分析エラー（状態 ${resp.status}）: ${resp.text.slice(0,1500)}`;
@@ -1065,6 +1088,7 @@ function matchClass(result){
 function docSlotHTML(cand, doc){
   const f = cand.files[doc.key];
   const filled = !!f;
+  const isCustomerOnly = doc.submitter === 'customer'; // 顧客提出専用（営業はアップロード不可）
   let mismatchNote = null;
   if(cand.result && cand.result.document_type_check && Array.isArray(cand.result.document_type_check.mismatches)){
     mismatchNote = cand.result.document_type_check.mismatches.find(m => m.slot_key === doc.key);
@@ -1072,21 +1096,28 @@ function docSlotHTML(cand, doc){
   const mismatchClass = mismatchNote ? 'mismatch' : '';
   const submitterLabel = doc.submitter === 'sales' ? '営業提出' : (doc.submitter === 'customer' ? '顧客提出' : '営業／顧客提出');
   const submitterColor = doc.submitter === 'sales' ? 'var(--teal)' : (doc.submitter === 'customer' ? 'var(--violet)' : 'var(--ink-soft)');
-  return `
-    <div class="doc-slot ${filled?'filled':''} ${mismatchClass}"
+  const lockedClass = (isCustomerOnly && !filled) ? 'locked' : '';
+  const interactionAttrs = isCustomerOnly ? `
+      ondragover="event.preventDefault();"
+      ondrop="event.preventDefault(); alert('この書類は先生専用リンクからご提出いただく項目です。営業側からは添付できません。');"` : `
       ondragover="event.preventDefault(); event.currentTarget.classList.add('drag')"
       ondragleave="event.currentTarget.classList.remove('drag')"
       ondrop="onDrop(event,'${cand.id}','${doc.key}')"
-      onclick="document.getElementById('file-${cand.id}-${doc.key}').click()">
+      onclick="document.getElementById('file-${cand.id}-${doc.key}').click()"`;
+  const emptyMessage = isCustomerOnly
+    ? '🔒 先生専用リンクからご提出いただく書類です（営業からは添付できません）'
+    : 'クリックまたはドラッグで添付';
+  return `
+    <div class="doc-slot ${filled?'filled':''} ${mismatchClass} ${lockedClass}"${interactionAttrs}>
       ${filled ? `<button type="button" class="doc-remove-btn" title="削除" onclick="removeFile('${cand.id}','${doc.key}', event)">×</button>` : ''}
       <span class="doc-label">${doc.label}</span>
       <span style="display:block;font-size:10.5px;font-weight:700;color:${submitterColor};margin:-2px 0 5px;">［${submitterLabel}］</span>
-      ${filled ? `<div class="doc-filename">📄 ${f.name}${f.pageCount>1 ? ` (${f.pageCount}ページ)` : ''} <span style="color:var(--ink-soft)">・${f.sizeLabel}</span></div>` : `<div class="doc-empty">クリックまたはドラッグで添付</div>`}
+      ${filled ? `<div class="doc-filename">📄 ${f.name}${f.pageCount>1 ? ` (${f.pageCount}ページ)` : ''} <span style="color:var(--ink-soft)">・${f.sizeLabel}</span></div>` : `<div class="doc-empty">${emptyMessage}</div>`}
       ${f && f.syncing ? `<div class="doc-mismatch-tag" style="color:var(--ink-soft)">⏳ 同期中…</div>` : ''}
       ${f && f.syncError ? `<div class="doc-mismatch-tag">⚠ ケースへの同期に失敗しました</div>` : ''}
       ${f && f.restoredWithoutData ? `<div class="doc-mismatch-tag" style="color:var(--ink-soft)">↻ 保存済み（再解析する場合は再度添付してください）</div>` : ''}
       ${mismatchNote ? `<div class="doc-mismatch-tag">⚠ 書類の種類が一致しない可能性</div>` : ''}
-      <input type="file" id="file-${cand.id}-${doc.key}" accept=".pdf,image/*"
+      <input type="file" id="file-${cand.id}-${doc.key}" accept=".pdf,image/*" ${isCustomerOnly ? 'disabled' : ''}
         onchange="handleFile('${cand.id}','${doc.key}', this.files[0])">
     </div>`;
 }
