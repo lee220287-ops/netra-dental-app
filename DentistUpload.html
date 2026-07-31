@@ -77,17 +77,84 @@ input[type=file]{display:none;}
 </div>
 
 <script>
-const DOC_TYPES = [
-  {key:'license', label:'歯科医師免許証', biz:true, indiv:true},
-  {key:'business_card', label:'名刺', biz:true, indiv:true},
-  {key:'employee_id', label:'社員証', biz:false, indiv:true},
-  {key:'homepage', label:'ホームページスクリーンショット', biz:true, indiv:false},
-  {key:'iryokikan', label:'医療機関情報スクリーンショット', biz:true, indiv:false},
-  {key:'opening_cert', label:'開設証明書スクリーンショット', biz:true, indiv:false},
-  {key:'job_posting', label:'求人サイトスクリーンショット（開院前）', biz:true, indiv:false},
-  {key:'corp_registry', label:'全部事項証明書（法人登記）', biz:true, indiv:false},
-  {key:'contract', label:'契約書', biz:true, indiv:true}
+const CATEGORIES = [
+  {key:'dental', label:'歯科（既存）'},
+  {key:'dental_new', label:'歯科（開院直後）'},
+  {key:'dental_preopen', label:'歯科（開院前）'},
+  {key:'individual_staff', label:'個人（勤務者）'},
+  {key:'lab', label:'技工所'},
+  {key:'other', label:'一般事業者'}
 ];
+
+const FIELD_LABELS = {
+  companyName:'医院名／事業所名', address:'住所', representative:'代表者名',
+  personInCharge:'担当者名', email:'メールアドレス', phone:'電話番号',
+  fax:'FAX番号', postalCode:'郵便番号', institutionCode:'医療機関コード',
+  licenseNumber:'ライセンス番号', managerFounder:'管理者／開設者',
+  openingDate:'開院日', homepageUrl:'ホームページURL', salesArea:'営業担当エリア'
+};
+
+const DOC_MATRIX = {
+  dental: [
+    {key:'license', label:'歯科医師免許証', submitter:'customer', verifies:['representative', 'licenseNumber']},
+    {key:'maron_capture', label:'医療機関キャプチャ（マロンホームページ）', submitter:'sales', verifies:['companyName', 'address', 'representative', 'phone', 'institutionCode', 'managerFounder']},
+    {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'representative', 'email', 'phone', 'fax', 'postalCode']},
+    {key:'homepage_director_capture', label:'歯科ホームページ 院長キャプチャ', submitter:'sales', verifies:['companyName', 'address', 'representative', 'phone', 'fax', 'postalCode', 'homepageUrl']},
+    {key:'corp_registry', label:'全部事項証明書（法人登記）', submitter:'customer', verifies:['companyName', 'address', 'representative']}
+  ],
+  dental_new: [
+    {key:'license', label:'歯科医師免許証', submitter:'customer', verifies:['representative', 'licenseNumber']},
+    {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'representative', 'email', 'phone', 'fax', 'postalCode']},
+    {key:'homepage_opening_capture', label:'歯科ホームページ 開院案内キャプチャ', submitter:'sales', verifies:['companyName', 'address', 'phone', 'postalCode', 'openingDate', 'homepageUrl']},
+    {key:'homepage_director_confirm', label:'歯科ホームページ 院長確認', submitter:'sales', verifies:['representative']},
+    {key:'corp_registry', label:'全部事項証明書（法人登記）', submitter:'customer', verifies:['companyName', 'address', 'representative']}
+  ],
+  dental_preopen: [
+    {key:'license', label:'歯科医師免許証', submitter:'customer', verifies:['representative', 'licenseNumber']},
+    {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'representative', 'email', 'phone', 'fax', 'postalCode']},
+    {key:'homepage_opening_capture', label:'歯科ホームページ(有) 開院案内キャプチャ', submitter:'sales', verifies:['companyName', 'address', 'representative', 'phone', 'postalCode', 'openingDate', 'homepageUrl']},
+    {key:'homepage_director_confirm', label:'歯科ホームページ(有) 院長確認', submitter:'sales', verifies:['representative']},
+    {key:'internet_search', label:'インターネット検索（求人広告または住所・地域と医院名が確認できる資料）', submitter:'sales', verifies:['companyName', 'openingDate', 'salesArea']},
+    {key:'corp_registry', label:'全部事項証明書（法人登記）', submitter:'customer', verifies:['companyName', 'address', 'representative']},
+    {key:'construction_plan', label:'建設計画書等（未完工の場合）', submitter:'customer', verifies:['address', 'salesArea']}
+  ],
+  individual_staff: [
+    {key:'license_individual', label:'歯科医師免許証（個人）', submitter:'customer', verifies:['personInCharge', 'licenseNumber']},
+    {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'personInCharge', 'email', 'phone', 'fax', 'postalCode']},
+    {key:'homepage_license_match', label:'歯科ホームページ（免許証本人マッチング）', submitter:'customer', verifies:['companyName', 'address', 'personInCharge']},
+    {key:'employment_proof', label:'社員証及び勤務中証明資料（免許証本人マッチング）', submitter:'customer', verifies:['companyName', 'personInCharge']}
+  ],
+  lab: [
+    {key:'lab_license', label:'技工士免許証（個人）', submitter:'customer', verifies:['representative', 'personInCharge']},
+    {key:'lab_registration', label:'技工所開設登録証', submitter:'customer', verifies:['companyName', 'address', 'representative', 'personInCharge', 'licenseNumber', 'managerFounder']},
+    {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'representative', 'personInCharge', 'email', 'phone', 'fax', 'postalCode']},
+    {key:'lab_homepage', label:'技工所ホームページキャプチャ', submitter:'sales', verifies:['companyName', 'address', 'phone', 'postalCode']},
+    {key:'corp_number_check', label:'法人番号確認（国税庁法人番号公表サイト）', submitter:'sales', verifies:['companyName', 'address', 'licenseNumber']},
+    {key:'corp_registry', label:'全部事項証明書（法人登記）', submitter:'customer', verifies:['companyName', 'address', 'representative', 'postalCode']}
+  ],
+  other: [
+    {key:'license_dental_or_lab', label:'歯科医師免許証／技工士免許証', submitter:'customer', verifies:['representative', 'personInCharge']},
+    {key:'lab_registration', label:'技工所開設登録証', submitter:'customer', verifies:['companyName', 'address', 'phone', 'postalCode']},
+    {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'representative', 'personInCharge', 'email', 'phone', 'fax', 'postalCode']},
+    {key:'lab_homepage', label:'技工所ホームページキャプチャ', submitter:'sales', verifies:['companyName', 'address']},
+    {key:'corp_number_check', label:'法人番号確認（国税庁法人番号公表サイト）', submitter:'sales', verifies:['companyName', 'address', 'phone', 'postalCode']}
+  ]
+};
+
+function docsForCategory(catKey){
+  return DOC_MATRIX[catKey] || DOC_MATRIX['dental'];
+}
+function categoryLabel(catKey){
+  const c = CATEGORIES.find(x=>x.key===catKey);
+  return c ? c.label : catKey;
+}
+// 旧バージョン（事業者biz／個人indiv の2種類）で保存されたケースを新しいカテゴリ体系に自動変換します。
+function normalizeRegType(regType, preOpen){
+  if(regType === 'biz') return preOpen ? 'dental_preopen' : 'dental';
+  if(regType === 'indiv') return 'individual_staff';
+  if(CATEGORIES.some(cat => cat.key === regType)) return regType;
+  return 'dental';
+}
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -218,12 +285,14 @@ function docSlotHTML(doc){
 }
 
 function render(){
-  const relevantDocs = DOC_TYPES.filter(d => caseInfo.regType === 'biz' ? d.biz : d.indiv);
+  // 顧客提出画面には、提出者が「customer」または「both」の書類のみを表示します
+  // （営業担当者専用の書類は表示しません）。
+  const relevantDocs = docsForCategory(caseInfo.regType).filter(d => d.submitter === 'customer' || d.submitter === 'both');
   document.getElementById('app').innerHTML = `
     <h1>書類のご提出</h1>
     <p class="sub">このページはあなた専用の提出フォームです。担当者がすでに提出した書類の内容は表示されません。ご自身の端末で直接撮影・添付していただけます。添付すると自動的に送信されます。</p>
     ${caseInfo.name ? `<div class="clinic-tag">${caseInfo.name}</div>` : ''}
-    <div class="notice">登録区分: ${caseInfo.regType === 'biz' ? '歯科（事業者）' : '個人（勤務者）'}${caseInfo.preOpen ? '・開院前' : ''}<br>該当する書類の中から、ご提出いただけるものを選んで添付してください（すべて揃っていなくても提出可能です）。</div>
+    <div class="notice">登録区分: ${categoryLabel(caseInfo.regType)}<br>該当する書類の中から、ご提出いただけるものを選んで添付してください（すべて揃っていなくても提出可能です）。</div>
     <div id="docGrid">${relevantDocs.map(docSlotHTML).join('')}</div>
     <button class="done-btn" onclick="finishSubmission()">提出を完了する</button>
   `;
@@ -264,6 +333,7 @@ function showNotice(msg){
         return;
       }
       caseInfo = resp;
+      caseInfo.regType = normalizeRegType(caseInfo.regType, caseInfo.preOpen);
       render();
     })
     .catch(function(err){
