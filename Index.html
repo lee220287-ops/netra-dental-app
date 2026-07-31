@@ -289,18 +289,21 @@ h1{
   <div id="googleSignInBtn"></div>
   <div id="loggedInBox" style="display:none;align-items:center;gap:10px;">
     <span id="loggedInName" style="font-size:13.5px;font-weight:600;"></span>
+    <button onclick="editProfile()" style="border:1px solid var(--line);background:#fff;border-radius:6px;padding:6px 12px;font-size:12.5px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;">プロフィール編集</button>
     <button onclick="googleLogout()" style="border:1px solid var(--line);background:#fff;border-radius:6px;padding:6px 12px;font-size:12.5px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;">ログアウト</button>
   </div>
 </div>
 
 <div id="employeeIdModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(23,33,30,0.55);z-index:200;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
-    <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;margin-bottom:8px;">初回ログインのご登録</div>
-    <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0 0 16px;">他の担当者に個人のGoogleアカウントが見えないよう、社員番号とお名前をご登録ください（最初の1回だけです）。</p>
+    <div id="empModalTitle" style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;margin-bottom:8px;">初回ログインのご登録</div>
+    <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0 0 16px;">他の担当者に個人のGoogleアカウントが見えないよう、社員番号・お名前・連絡用メールをご登録ください。承認・却下などの通知は、下の「連絡用メール」宛に送信されます。</p>
     <label style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:4px;">お名前</label>
     <input id="empIdNameInput" type="text" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:7px;font-size:14px;margin-bottom:14px;font-family:'Noto Sans JP',sans-serif;">
     <label style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:4px;">社員番号</label>
-    <input id="empIdInput" type="text" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:7px;font-size:14px;margin-bottom:18px;font-family:'Noto Sans JP',sans-serif;" placeholder="例: E12345">
+    <input id="empIdInput" type="text" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:7px;font-size:14px;margin-bottom:14px;font-family:'Noto Sans JP',sans-serif;" placeholder="例: E12345">
+    <label style="font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:4px;">連絡用メール（会社メールなど、通知を受け取りたいアドレス）</label>
+    <input id="empContactEmailInput" type="email" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:7px;font-size:14px;margin-bottom:18px;font-family:'Noto Sans JP',sans-serif;" placeholder="例: yamada@company.co.jp">
     <button onclick="submitEmployeeId()" class="add-btn" style="width:100%;margin:0;">登録して始める</button>
   </div>
 </div>
@@ -913,6 +916,7 @@ const GOOGLE_USER_STORAGE_KEY = 'netra_google_user_v1';
 let currentUserEmail = '';
 let currentUserName = '';
 let currentUserEmployeeId = '';
+let currentUserContactEmail = '';
 
 function updateLoginUI(){
   const statusText = document.getElementById('loginStatusText');
@@ -922,7 +926,7 @@ function updateLoginUI(){
     statusText.style.display = 'none';
     signInBtn.style.display = 'none';
     loggedInBox.style.display = 'flex';
-    document.getElementById('loggedInName').textContent = `👤 ${currentUserName}（社員番号: ${currentUserEmployeeId || '-'} / ${currentUserEmail}）`;
+    document.getElementById('loggedInName').textContent = `👤 ${currentUserName}（社員番号: ${currentUserEmployeeId || '-'}）${currentUserContactEmail ? ' ・連絡先: ' + currentUserContactEmail : ''}`;
   } else {
     statusText.style.display = 'block';
     signInBtn.style.display = 'block';
@@ -931,7 +935,7 @@ function updateLoginUI(){
 }
 
 function persistLoginCache(){
-  try{ localStorage.setItem(GOOGLE_USER_STORAGE_KEY, JSON.stringify({email:currentUserEmail, name:currentUserName, employeeId:currentUserEmployeeId})); }catch(e){}
+  try{ localStorage.setItem(GOOGLE_USER_STORAGE_KEY, JSON.stringify({email:currentUserEmail, name:currentUserName, employeeId:currentUserEmployeeId, contactEmail:currentUserContactEmail})); }catch(e){}
 }
 
 function finishLoginFlow(){
@@ -939,37 +943,48 @@ function finishLoginFlow(){
   updateLoginUI();
 }
 
-// 첫 로그인 시 사원번호를 입력받습니다. 이미 등록된 사용자라면 이 화면은 뜨지 않습니다.
-function showEmployeeIdModal(){
+// 이 브라우저에 저장된 카드 목록을 완전히 초기화합니다.
+// (계정이 바뀌었을 때, 이전 사용자의 카드가 남아있지 않도록 하기 위함)
+function resetLocalCandidates(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  candidates = [];
+  render();
+}
+
+// 첫 로그인 시(또는 프로필 수정 시) 정보를 입력받습니다.
+function showEmployeeIdModal(isEdit){
+  document.getElementById('empModalTitle').textContent = isEdit ? 'プロフィールの編集' : '初回ログインのご登録';
   document.getElementById('empIdNameInput').value = currentUserName || '';
-  document.getElementById('empIdInput').value = '';
+  document.getElementById('empIdInput').value = currentUserEmployeeId || '';
+  document.getElementById('empContactEmailInput').value = currentUserContactEmail || '';
   document.getElementById('employeeIdModalOverlay').style.display = 'flex';
 }
 
 async function submitEmployeeId(){
   const employeeId = document.getElementById('empIdInput').value.trim();
   const name = document.getElementById('empIdNameInput').value.trim();
-  if(!employeeId){
-    alert('社員番号を入力してください。');
-    return;
-  }
-  if(!name){
-    alert('お名前を入力してください。');
-    return;
-  }
+  const contactEmail = document.getElementById('empContactEmailInput').value.trim();
+  if(!employeeId){ alert('社員番号を入力してください。'); return; }
+  if(!name){ alert('お名前を入力してください。'); return; }
+  if(!contactEmail || contactEmail.indexOf('@') === -1){ alert('連絡用メールを正しく入力してください。'); return; }
   try{
-    const resp = await gsRun('registerUser', currentUserEmail, employeeId, name);
+    const resp = await gsRun('upsertUserProfile', currentUserEmail, employeeId, name, contactEmail);
     if(!resp || !resp.ok){
       alert('登録に失敗しました: ' + (resp ? resp.error : '不明なエラー'));
       return;
     }
     currentUserEmployeeId = employeeId;
     currentUserName = name;
+    currentUserContactEmail = contactEmail;
     document.getElementById('employeeIdModalOverlay').style.display = 'none';
     finishLoginFlow();
   }catch(e){
     alert('登録中にエラーが発生しました: ' + e.message);
   }
+}
+
+function editProfile(){
+  showEmployeeIdModal(true);
 }
 
 function handleGoogleLogin(response){
@@ -979,15 +994,33 @@ function handleGoogleLogin(response){
         alert('ログインに失敗しました: ' + (resp ? resp.error : '不明なエラー'));
         return;
       }
+      // この端末で以前ログインしていたアカウントと違う場合は、画面のカードをリセットします
+      // （他の人のカードが誤って表示され続けるのを防ぐため）。
+      let previousEmail = '';
+      try{
+        const cached = localStorage.getItem(GOOGLE_USER_STORAGE_KEY);
+        if(cached) previousEmail = (JSON.parse(cached).email || '');
+      }catch(e){}
+      const accountSwitched = previousEmail && previousEmail !== resp.email;
+
       currentUserEmail = resp.email;
       currentUserName = resp.name;
+
+      if(accountSwitched){
+        resetLocalCandidates();
+      }
+
       return gsRun('getUserInfo', currentUserEmail).then(info => {
         if(info && info.ok && info.registered){
           currentUserEmployeeId = info.employeeId;
           currentUserName = info.name || currentUserName;
+          currentUserContactEmail = info.contactEmail || '';
           finishLoginFlow();
+          if(accountSwitched){
+            alert('別のアカウントでログインしました。画面のカードを新しい状態にリセットしました。以前の続きを見るには「既存ケースを復元」をお使いください。');
+          }
         } else {
-          showEmployeeIdModal(); // 처음 로그인 → 사원번호 등록 필요
+          showEmployeeIdModal(false); // 처음 로그인 → 등록 필요
         }
       });
     })
@@ -998,10 +1031,12 @@ function googleLogout(){
   currentUserEmail = '';
   currentUserName = '';
   currentUserEmployeeId = '';
+  currentUserContactEmail = '';
   try{ localStorage.removeItem(GOOGLE_USER_STORAGE_KEY); }catch(e){}
   if(window.google && google.accounts && google.accounts.id){
     google.accounts.id.disableAutoSelect();
   }
+  resetLocalCandidates();
   updateLoginUI();
 }
 
@@ -1011,20 +1046,21 @@ function initGoogleSignIn(){
     const cached = localStorage.getItem(GOOGLE_USER_STORAGE_KEY);
     if(cached){
       const u = JSON.parse(cached);
-      currentUserEmail = u.email; currentUserName = u.name; currentUserEmployeeId = u.employeeId || '';
+      currentUserEmail = u.email; currentUserName = u.name; currentUserEmployeeId = u.employeeId || ''; currentUserContactEmail = u.contactEmail || '';
     }
   }catch(e){}
   updateLoginUI();
 
-  // 캐시된 사원번호가 없으면(예: 예전 버전에서 로그인한 경우) 서버에서 다시 확인합니다.
-  if(currentUserEmail && !currentUserEmployeeId){
+  // 캐시된 사원번호／연락처가 없으면(예: 예전 버전에서 로그인한 경우) 서버에서 다시 확인합니다.
+  if(currentUserEmail && (!currentUserEmployeeId || !currentUserContactEmail)){
     gsRun('getUserInfo', currentUserEmail).then(info => {
       if(info && info.ok && info.registered){
         currentUserEmployeeId = info.employeeId;
         currentUserName = info.name || currentUserName;
+        currentUserContactEmail = info.contactEmail || '';
         finishLoginFlow();
       } else if(info && info.ok){
-        showEmployeeIdModal();
+        showEmployeeIdModal(false);
       }
     }).catch(()=>{});
   }
