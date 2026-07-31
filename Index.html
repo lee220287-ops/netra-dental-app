@@ -361,7 +361,7 @@ const CATEGORIES = [
   {key:'dental_preopen', label:'歯科（開院前）'},
   {key:'individual_staff', label:'個人（勤務者）'},
   {key:'lab', label:'技工所'},
-  {key:'other', label:'その他事業体'}
+  {key:'other', label:'一般事業者'}
 ];
 
 const FIELD_LABELS = {
@@ -425,6 +425,19 @@ function docsForCategory(catKey){
 function categoryLabel(catKey){
   const c = CATEGORIES.find(x=>x.key===catKey);
   return c ? c.label : catKey;
+}
+
+// このユーザーに顧客提出（または営業／顧客提出）区分の書類が実際に添付されているかを確認します。
+function hasCustomerSubmittedDoc(c){
+  return docsForCategory(c.regType).some(d => (d.submitter === 'customer' || d.submitter === 'both') && !!c.files[d.key]);
+}
+
+// 新規登録要請の対象となる条件: 分析完了・一致率90%以上・顧客提出書類が最低1件存在すること。
+const REGISTRATION_MATCH_RATE_THRESHOLD = 90;
+function isEligibleForRegistration(c){
+  return c.status === 'done' && c.result
+    && (c.result.match_rate ?? 0) >= REGISTRATION_MATCH_RATE_THRESHOLD
+    && hasCustomerSubmittedDoc(c);
 }
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -807,6 +820,7 @@ function buildSchemaPrompt(cand){
   const catDocs = docsForCategory(cand.regType);
   const typeLabel = categoryLabel(cand.regType);
   const isIndividualLike = (cand.regType === 'individual_staff');
+  const isDentalLike = (cand.regType === 'dental' || cand.regType === 'dental_new' || cand.regType === 'dental_preopen');
 
   const typeContext = isIndividualLike
     ? `担当者はこのユーザーを「${typeLabel}」として分類しました。この人物は代表者ではなく、勤務先の医院／事業所に所属するスタッフです。`
@@ -830,16 +844,24 @@ function buildSchemaPrompt(cand){
 
 各書類について、下記の「抽出対象項目」に指定されたフィールドのみを抽出してください（指定されていない項目は無理に埋めず、空文字のままにしてください）。「医療機関コード」に関連する書類で、都道府県コード・保険区分・医療機関コードの3つを組み合わせた「全体コード」が読み取れる場合は institutionCode に単独コードを、備考があれば overall_note 等で補足してください。
 
+抽出する値（documents／netra_export内の値）は、全角の数字・英字・記号は半角に変換し、余分な空白（スペース）は入れずに出力してください（例: "０３−１２３４"ではなく"03-1234"）。ただし overall_note や registration_type_note などの自由記述の説明文はこの限りではありません。
+
 対応する書類キー一覧（★の項目は書類ごとに抽出すべきフィールドです）:
 ${docListForPrompt}
 
 判定ルール（必ず順番に適用。数値・件数条件を厳密に守り、独自の追加条件を作らないこと）:
-1. 提出された書類の件数が「2件未満」の場合のみ → overall_status = "不適合（書類不足）"。
+1. 提出された書類の件数が「2件未満」の場合 → overall_status = "不適合（書類不足）"。
    重要: 提出書類が2件以上あれば、特定の種類の書類が含まれていなくても、その理由だけで「書類不足」と判定してはいけません。件数のみをこの条件の判断基準にしてください。
-2. 書類間で本来一致すべき項目（医院名／事業所名、住所、代表者名や担当者名など）が明らかに異なる場合 → overall_status = "要確認"
-3. 「参考: インターネット上の実際のウェブサイトから取得した内容」が提供されている場合、その内容と書類上の情報を照合し、website_verification に結果を記載してください。明らかに異なる医院・事業所の情報が書かれている場合 → overall_status = "要確認"。ウェブサイト内容が提供されていない場合は website_verification.実施有無 を false、result を "未実施" としてください。
-4. 提出書類が2件以上あり、書類間の情報一致率（match_rate, 0〜100の整数）が80以上で、かつ上記2・3に該当しない場合 → overall_status = "適合（登録可能）"。ある項目が一部の書類に記載されておらず「確認不可」であっても、他の項目が一致していれば不利に扱わないでください。
-5. その他の曖昧なケース → overall_status = "要確認"
+2. 提出された書類の中に「顧客提出」区分の書類が1件もない場合 → overall_status = "不適合（書類不足）"。営業提出の書類のみでは、件数が足りていても登録は不可とします。
+3. 書類間で本来一致すべき項目（医院名／事業所名、住所、代表者名や担当者名など）が明らかに異なる場合 → overall_status = "要確認"
+${isDentalLike ? `4. この区分（${typeLabel}）は歯科医院に関する登録のため、追加で以下を確認してください:
+   歯科医師免許証に記載の氏名が、医療機関キャプチャ（マロン）に記載の「管理者名」または「開設者名」のいずれかと一致するか確認してください。
+   一致する場合は cross_check.license_representative_match の result を "一致" としてください。
+   一致しない場合、または医療機関キャプチャの管理者／開設者情報がそもそも読み取れない場合は、名刺またはホームページの記載内容から、免許証の人物が「理事長」「社長」「会長」「代表」のいずれかの肩書きを持つ代表者であることが確認できるかを追加で確認してください。
+   その肩書きが確認できれば result を "一致"、確認できなければ result を "不一致" とし、その場合は overall_status = "要確認" としてください。detail に判断根拠を簡潔に記載してください。
+` : ''}5. 「参考: インターネット上の実際のウェブサイトから取得した内容」が提供されている場合、その内容と書類上の情報を照合し、website_verification に結果を記載してください。明らかに異なる医院・事業所の情報が書かれている場合 → overall_status = "要確認"。ウェブサイト内容が提供されていない場合は website_verification.実施有無 を false、result を "未実施" としてください。
+6. 提出書類が2件以上あり、その中に「顧客提出」区分の書類が少なくとも1件含まれており、書類間の情報一致率（match_rate, 0〜100の整数）が90以上で、かつ上記2・3${isDentalLike ? '・4' : ''}・5に該当しない場合 → overall_status = "適合（登録可能）"。ある項目が一部の書類に記載されておらず「確認不可」であっても、他の項目が一致していれば不利に扱わないでください。
+7. その他の曖昧なケース、または一致率が90未満の場合 → overall_status = "要確認"（ただし1・2に該当する場合は必ず"不適合（書類不足）"を優先してください）
 
 以下のJSON形式のみで応答してください。説明文やマークダウン、コードフェンスは一切不要です、純粋なJSONのみを出力してください:
 
@@ -860,7 +882,8 @@ ${docsSchema}
   },
   "cross_check": {
     "name_consistency": {"result": "一致", "detail": ""},
-    "address_consistency": {"result": "一致", "detail": ""}
+    "address_consistency": {"result": "一致", "detail": ""}${isDentalLike ? `,
+    "license_representative_match": {"result": "一致", "detail": ""}` : ''}
   },
   "doc_count_submitted": 0,
   "match_rate": 0,
@@ -1076,6 +1099,24 @@ window.addEventListener('load', initGoogleSignIn);
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
+// 전각 영숫자/기호를 반각으로 변환하고, 모든 공백(반각/전각)을 완전히 제거합니다.
+function toHalfWidthAndTrim(str){
+  if(typeof str !== 'string') return str;
+  let s = str.replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  s = s.replace(/[\s\u3000]/g, '');
+  return s;
+}
+// 객체 안의 문자열 값들에만 위 정규화를 적용합니다 (숫자/불리언 등은 그대로 둡니다).
+function normalizeDataObject(obj){
+  if(!obj || typeof obj !== 'object') return obj;
+  const out = {};
+  Object.keys(obj).forEach(k => {
+    const v = obj[k];
+    out[k] = (typeof v === 'string') ? toHalfWidthAndTrim(v) : v;
+  });
+  return out;
+}
+
 // Gemini 서버가 일시적으로 混雑（503 UNAVAILABLE）している場合、少し待って自動的に再試行します。
 async function callGeminiWithRetry(payload, maxRetries){
   maxRetries = maxRetries || 2;
@@ -1195,6 +1236,16 @@ async function analyzeCandidate(id){
     const geminiText = data.candidates[0].content.parts[0].text;
     const clean = geminiText.replace(/```json|```/g,'').trim();
     const parsed = JSON.parse(clean);
+    // 추출된 데이터 값은 전각 문자를 반각으로 통일하고, 모든 공백을 제거해서 일관성을 맞춥니다.
+    // (説明文・備考などの自由記述は対象外とし、documents／netra_exportの抽出値のみ正規化します)
+    if(parsed.documents){
+      Object.keys(parsed.documents).forEach(docKey => {
+        parsed.documents[docKey] = normalizeDataObject(parsed.documents[docKey]);
+      });
+    }
+    if(parsed.netra_export){
+      parsed.netra_export = normalizeDataObject(parsed.netra_export);
+    }
     c.result = parsed;
     c.status = 'done';
   }catch(parseErr){
@@ -1563,6 +1614,7 @@ function resultHTML(cand){
         <tbody>
           <tr><td style="font-weight:600">氏名一致</td><td colspan="3" class="${matchClass(cc.name_consistency?.result)}">${cc.name_consistency?.result || '確認不可'} ${cc.name_consistency?.detail ? '・' + cc.name_consistency.detail : ''}</td></tr>
           <tr><td style="font-weight:600">住所一致</td><td colspan="3" class="${matchClass(cc.address_consistency?.result)}">${cc.address_consistency?.result || '確認不可'} ${cc.address_consistency?.detail ? '・' + cc.address_consistency.detail : ''}</td></tr>
+          ${cc.license_representative_match ? `<tr><td style="font-weight:600">免許証・代表者一致</td><td colspan="3" class="${matchClass(cc.license_representative_match.result)}">${cc.license_representative_match.result || '確認不可'} ${cc.license_representative_match.detail ? '・' + cc.license_representative_match.detail : ''}</td></tr>` : ''}
         </tbody>
       </table>
       <div class="note-box">${r.overall_note || ''}</div>
@@ -1599,9 +1651,9 @@ function render(){
     </div>
   `).join('') || `<p style="color:var(--ink-soft);font-size:14px;">まだ追加されたユーザーがいません。上の「＋ ユーザー追加」ボタンから始めてください。</p>`;
 
-  const doneCount = candidates.filter(c=>c.status==='done' && (c.result?.match_rate ?? 0) >= 80).length;
+  const doneCount = candidates.filter(c=>isEligibleForRegistration(c)).length;
   document.getElementById('exportInfo').textContent =
-    doneCount>0 ? `${doneCount}名分析完了（一致率80%以上） — 出力できます。` : '一致率80%以上で分析完了したユーザーがいません。';
+    doneCount>0 ? `${doneCount}名分析完了（一致率${REGISTRATION_MATCH_RATE_THRESHOLD}%以上・顧客提出書類あり） — 出力できます。` : `一致率${REGISTRATION_MATCH_RATE_THRESHOLD}%以上、かつ顧客提出書類がある分析完了ユーザーがいません。`;
   document.getElementById('exportBtn').disabled = doneCount===0;
   document.getElementById('sheetBtn').disabled = doneCount===0;
   saveCandidatesToStorage();
@@ -1695,7 +1747,7 @@ function computeCandidateFields(c){
 }
 
 function buildExportRows(){
-  const eligible = candidates.filter(c=>c.status==='done' && c.result && (c.result.match_rate ?? 0) >= 80);
+  const eligible = candidates.filter(c=>isEligibleForRegistration(c));
   const rows = eligible.map(c=>{
     const f = computeCandidateFields(c);
     const { doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d } = f;
