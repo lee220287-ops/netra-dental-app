@@ -339,6 +339,7 @@ h1{
       <input type="checkbox" id="restoreShowAllChk" onchange="toggleRestoreShowAll(this.checked)">
       他の担当者が作成したケースも表示する
     </label>
+    <div id="restoreAllBtnWrap" style="padding:10px 20px 0;"></div>
     <div style="padding:8px 8px;overflow-y:auto;" id="restoreModalList"></div>
   </div>
 </div>
@@ -514,12 +515,19 @@ function toggleRestoreShowAll(checked){
 
 function renderRestoreList(){
   const listEl = document.getElementById('restoreModalList');
+  const restoreAllBtnWrap = document.getElementById('restoreAllBtnWrap');
   const loadedIds = new Set(candidates.map(c=>c.caseId));
   let filtered = _restoreCasesAll.filter(x => !loadedIds.has(x.caseId));
   if(!_restoreShowAll && currentUserEmail){
     filtered = filtered.filter(x => x.createdBy === currentUserEmail);
   }
   _restoreCaseCache = filtered;
+
+  const mineCount = _restoreCaseCache.filter(x => x.createdBy === currentUserEmail).length;
+  restoreAllBtnWrap.innerHTML = mineCount > 0
+    ? `<button class="add-btn" style="margin:0;font-size:12.5px;padding:8px 14px;" onclick="restoreAllMine()">↻ 自分のケースを全て復元（${mineCount}件）</button>`
+    : '';
+
   if(_restoreCaseCache.length === 0){
     listEl.innerHTML = `<div style="padding:24px;color:var(--ink-soft);text-align:center;">${_restoreShowAll ? '復元できる待機中のケースはありません。' : '自分が作成した、復元できる待機中のケースはありません。「他の担当者が作成したケースも表示する」もお試しください。'}</div>`;
     return;
@@ -534,7 +542,7 @@ function renderRestoreList(){
     const ownerLabel = isMine ? '' : `・作成者: ${escapeHtml(x.createdByDisplay || '不明')}`;
     const lockBadge = isMine ? '' : `<span style="font-size:10.5px;font-weight:700;color:var(--violet);">🔒 表示権限が必要な場合があります</span>`;
     return `
-      <div class="restore-item" onclick="handleRestoreItemClick(${idx})">
+      <div class="restore-item" id="restoreItem-${idx}" onclick="handleRestoreItemClick(${idx})">
         <div style="font-weight:700;">${mainLabel} ${subLabel}</div>
         <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${categoryLabel(x.regType)} ・ 最終更新: ${x.updatedAt ? new Date(x.updatedAt).toLocaleString('ja-JP') : '-'} ・ ケースID: ${escapeHtml(x.caseId)}${ownerLabel}</div>
         ${lockBadge ? `<div style="margin-top:3px;">${lockBadge}</div>` : ''}
@@ -593,39 +601,66 @@ async function handleRestoreItemClick(idx){
   }
 }
 
+// 実際にケースをカードとして復元する共通処理です（単体復元・一括復元の両方から呼ばれます）。
+async function restoreCaseObject(item){
+  if(candidates.some(c => c.caseId === item.caseId)) return { ok:false, skipped:true };
+  let filesMeta = {};
+  try{
+    const statusResp = await gsRun('getCaseStatus', item.caseId);
+    if(statusResp && statusResp.ok) filesMeta = statusResp.files || {};
+  }catch(e){ /* 파일 목록 없이도 카드 자체는 복원 진행 */ }
+
+  const filesLight = {};
+  Object.keys(filesMeta).forEach(k => {
+    filesLight[k] = { name:'(復元済み・内容確認は下のボタンから)', pageCount:1, bytes:0, sizeLabel:'-', source: filesMeta[k].source, restoredWithoutData:true };
+  });
+
+  const id = 'c' + (seq++);
+  const c = {
+    id, name: item.name || '', memo: item.memo || '',
+    regType: normalizeRegType(item.regType, item.preOpen), preOpen: !!item.preOpen,
+    includeEmail:false, files: filesLight, status:'idle', result:null, error:null,
+    caseId: item.caseId, caseReady:true, showDentistPanel:false, createdBy: item.createdBy || '',
+    dentistEmail: item.dentistEmail || '',
+    dentistFilledKeys: Object.keys(filesMeta).filter(k => filesMeta[k].source === 'dentist')
+  };
+  candidates.push(c);
+  return { ok:true };
+}
+
 async function restoreCaseFromList(idx){
   const item = _restoreCaseCache[idx];
   if(!item) return;
   closeRestoreModal();
-  if(candidates.some(c => c.caseId === item.caseId)){
-    alert('このケースはすでに画面に表示されています。');
-    return;
-  }
   try{
-    let filesMeta = {};
-    try{
-      const statusResp = await gsRun('getCaseStatus', item.caseId);
-      if(statusResp && statusResp.ok) filesMeta = statusResp.files || {};
-    }catch(e){ /* 파일 목록 없이도 카드 자체는 복원 진행 */ }
-
-    const filesLight = {};
-    Object.keys(filesMeta).forEach(k => {
-      filesLight[k] = { name:'(復元済み・内容確認は下のボタンから)', pageCount:1, bytes:0, sizeLabel:'-', source: filesMeta[k].source, restoredWithoutData:true };
-    });
-
-    const id = 'c' + (seq++);
-    const c = {
-      id, name: item.name || '', memo: item.memo || '',
-      regType: normalizeRegType(item.regType, item.preOpen), preOpen: !!item.preOpen,
-      includeEmail:false, files: filesLight, status:'idle', result:null, error:null,
-      caseId: item.caseId, caseReady:true, showDentistPanel:false, createdBy: item.createdBy || '',
-      dentistFilledKeys: Object.keys(filesMeta).filter(k => filesMeta[k].source === 'dentist')
-    };
-    candidates.push(c);
+    const result = await restoreCaseObject(item);
+    if(result.skipped){
+      alert('このケースはすでに画面に表示されています。');
+      return;
+    }
     render();
+    showSaveToast('✓ ケースを復元しました');
   }catch(e){
     alert('復元中にエラーが発生しました: ' + e.message);
   }
+}
+
+// 自分が作成した、まだ画面に表示されていないケースを一括で復元します。
+async function restoreAllMine(){
+  const targets = _restoreCaseCache.filter(x => x.createdBy === currentUserEmail);
+  if(targets.length === 0) return;
+  const listEl = document.getElementById('restoreModalList');
+  let doneCount = 0;
+  for(const item of targets){
+    listEl.innerHTML = `<div style="padding:24px;color:var(--ink-soft);text-align:center;">復元中… (${doneCount}/${targets.length}件)</div>`;
+    try{
+      await restoreCaseObject(item);
+    }catch(e){ /* 개별 실패는 건너뛰고 계속 진행 */ }
+    doneCount++;
+  }
+  render();
+  closeRestoreModal();
+  showSaveToast(`✓ ${doneCount}件のケースを復元しました`);
 }
 
 async function removeCandidate(id){
@@ -1386,8 +1421,63 @@ function casePanelHTML(cand){
         </button>
       </div>
       ${cand.showCaseQr ? `<div class="case-qr"><img src="${qrSrc}" alt="QRコード" width="180" height="180"></div>` : ''}
+      <div class="case-link-row" style="margin-top:8px;">
+        <input type="email" id="dentistEmail-${cand.id}" class="case-link-input" placeholder="先生のメールアドレス（任意）" value="${escapeHtml(cand.dentistEmail || '')}">
+        <button class="case-btn" onclick="sendCaseLinkByEmail('${cand.id}')" ${cand.sendingEmail ? 'disabled' : ''}>${cand.sendingEmail ? '送信中…' : 'メールで送信'}</button>
+        ${cand.dentistEmail ? `<button class="case-btn secondary" onclick="clearCaseDentistEmail('${cand.id}')">削除</button>` : ''}
+      </div>
+      ${cand.dentistEmail ? `<div class="case-status-note" style="color:var(--teal);">✓ このメールアドレス（${escapeHtml(cand.dentistEmail)}）は、新規登録要請の際に登録情報として保存されます。不要な場合は上の「削除」で消せます。</div>` : ''}
       <div class="case-status-note">このリンクを先生に送るか、QRコードを読み取っていただくと、先生ご本人のスマホから直接書類を提出できます（担当者がここで添付した内容は先生には表示されません）。ここでアップロードした書類も自動的にこのケースに同期されます。書類が届くと、上記のバッジで自動的にお知らせします（約20秒ごとに自動確認）。</div>
     </div>`;
+}
+
+async function sendCaseLinkByEmail(candId){
+  const c = candidates.find(x=>x.id===candId);
+  if(!c) return;
+  const input = document.getElementById('dentistEmail-' + candId);
+  const email = input ? input.value.trim() : '';
+  if(!email || email.indexOf('@') === -1){
+    alert('正しいメールアドレスを入力してください。');
+    return;
+  }
+  const link = caseLinkFor(c);
+  c.sendingEmail = true;
+  render();
+  try{
+    const resp = await gsRun('sendCaseLinkEmail', c.caseId, email, link, currentUserName);
+    c.sendingEmail = false;
+    if(resp && resp.ok){
+      c.dentistEmail = email;
+      render();
+      showSaveToast('✓ 先生にメールを送信しました');
+    } else {
+      render();
+      alert('送信に失敗しました: ' + (resp ? resp.error : '不明なエラー'));
+    }
+  }catch(e){
+    c.sendingEmail = false;
+    render();
+    alert('送信中にエラーが発生しました: ' + e.message);
+  }
+}
+
+async function clearCaseDentistEmail(candId){
+  const c = candidates.find(x=>x.id===candId);
+  if(!c) return;
+  const ok = confirm('保存されているメールアドレスを削除しますか？');
+  if(!ok) return;
+  try{
+    const resp = await gsRun('setCaseDentistEmail', c.caseId, '');
+    if(resp && resp.ok){
+      c.dentistEmail = '';
+      render();
+      showSaveToast('✓ メールアドレスを削除しました');
+    } else {
+      alert('削除に失敗しました: ' + (resp ? resp.error : '不明なエラー'));
+    }
+  }catch(e){
+    alert('削除中にエラーが発生しました: ' + e.message);
+  }
 }
 
 function toggleCaseQr(candId){
@@ -1525,16 +1615,22 @@ function fieldRowHTML(cand, label, values){
 }
 
 function emailRowHTML(cand){
+  const rows = [];
+  if(cand.dentistEmail){
+    rows.push(`<tr><td style="font-weight:600">先生のメール（送信済み）</td><td colspan="3">${escapeHtml(cand.dentistEmail)} <span style="color:var(--teal);font-size:12px;">・登録情報に自動反映されます</span></td></tr>`);
+  }
   const d = cand.result?.documents || {};
   const email = collectFieldValue(d, 'email');
-  if(!email) return '';
-  return `<tr><td style="font-weight:600">メールアドレス</td><td colspan="3">
+  if(email && email !== cand.dentistEmail){
+    rows.push(`<tr><td style="font-weight:600">メールアドレス（書類から抽出）</td><td colspan="3">
       <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
         <input type="checkbox" ${cand.includeEmail?'checked':''} onchange="toggleIncludeEmail('${cand.id}', this.checked)">
         <span>${email}</span>
-        <span style="color:var(--ink-soft);font-size:12px;">（チェックを入れると登録情報に含めます）</span>
+        <span style="color:var(--ink-soft);font-size:12px;">（チェックを入れると登録情報に含めます。先生のメール送信済みの場合はそちらが優先されます）</span>
       </label>
-    </td></tr>`;
+    </td></tr>`);
+  }
+  return rows.join('');
 }
 
 function resultHTML(cand){
@@ -1623,9 +1719,10 @@ function resultHTML(cand){
 
 function render(){
   const el = document.getElementById('cards');
-  el.innerHTML = candidates.map(c => `
+  el.innerHTML = candidates.map((c, idx) => `
     <div class="card">
       <div class="card-top">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;margin-right:2px;">${idx+1}</span>
         <input class="name-input" placeholder="ユーザー名入力" value="${c.name}"
           oninput="updateName('${c.id}', this.value)" onblur="syncCaseMeta('${c.id}')" onkeydown="saveOnEnter(event)">
         <button class="remove-btn" onclick="removeCandidate('${c.id}')">削除</button>
@@ -1742,7 +1839,9 @@ function computeCandidateFields(c){
   const addressField = selectedFieldValue(c, FIELD_LABELS.address, ne.bill_to || collectFieldValue(d,'address') || '');
   const licenseField = selectedFieldValue(c, FIELD_LABELS.licenseNumber, ne.license_no || collectFieldValue(d,'licenseNumber') || '');
   const codeField = selectedFieldValue(c, '医療機関コード', institutionCodeDisplay(c.result));
-  const emailField = c.includeEmail ? (collectFieldValue(d,'email') || ne.email || '') : '';
+  // 영업이 직접 입력해서 선생님께 보낸 메일 주소가 있으면 그것을 우선 사용하고,
+  // 없으면 기존처럼 명함 등에서 추출된 이메일(체크박스로 포함 동의한 경우)을 사용합니다.
+  const emailField = c.dentistEmail || (c.includeEmail ? (collectFieldValue(d,'email') || ne.email || '') : '');
   return { isBiz, doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d };
 }
 
