@@ -1152,9 +1152,10 @@ function normalizeDataObject(obj){
   return out;
 }
 
-// Gemini 서버가 일시적으로 混雑（503 UNAVAILABLE）している場合、少し待って自動的に再試行します。
-async function callGeminiWithRetry(payload, maxRetries){
-  maxRetries = maxRetries || 2;
+// Gemini 서버가 일시적으로 混雑（503 UNAVAILABLE）している場合、短い間隔で自動的に再試行します。
+// onRetry: 각 재시도 시점마다 호출되는 콜백 (화면에 "재시도 중" 안내를 보여주기 위함)
+async function callGeminiWithRetry(payload, maxRetries, onRetry){
+  maxRetries = maxRetries || 4;
   let lastResp = null;
   for(let attempt = 0; attempt <= maxRetries; attempt++){
     const resp = await gsRun('callGoogleGeminiAPI', payload);
@@ -1162,7 +1163,10 @@ async function callGeminiWithRetry(payload, maxRetries){
     const isOverloaded = resp && !resp.ok && (resp.status === 503 || (resp.text && resp.text.indexOf('UNAVAILABLE') !== -1));
     if(resp && resp.ok) return resp;
     if(!isOverloaded) return resp; // 과부하가 아닌 다른 에러는 즉시 반환
-    if(attempt < maxRetries) await sleep(2000 * (attempt + 1)); // 2초, 4초 간격으로 재시도
+    if(attempt < maxRetries){
+      if(onRetry) onRetry(attempt + 1, maxRetries);
+      await sleep(1500); // 대기 시간은 짧게 고정(1.5초)하고, 대신 재시도 횟수를 늘립니다.
+    }
   }
   return lastResp;
 }
@@ -1260,10 +1264,17 @@ async function analyzeCandidate(id){
   }
 
   try{
-    const resp = await callGeminiWithRetry({contents:[{parts:parts}]});
+    const resp = await callGeminiWithRetry({contents:[{parts:parts}]}, 4, (attempt, max) => {
+      c.retryInfo = `AIサーバーが混雑しているため、自動的に再試行しています（${attempt}/${max}回目）…`;
+      render();
+    });
+    c.retryInfo = null;
     if(!resp.ok){
+      const isOverloaded = resp.status === 503 || (resp.text && resp.text.indexOf('UNAVAILABLE') !== -1);
       c.status = 'error';
-      c.error = `AI分析エラー（状態 ${resp.status}）: ${resp.text.slice(0,1500)}`;
+      c.error = isOverloaded
+        ? '現在、Googleサーバーが混雑しているため分析できませんでした。しばらく時間をおいてから「書類分析する」を再度押してください。'
+        : `AI分析エラー（状態 ${resp.status}）: ${resp.text.slice(0,1500)}`;
       render();
       return;
     }
@@ -1285,6 +1296,7 @@ async function analyzeCandidate(id){
     c.status = 'done';
   }catch(parseErr){
     console.error(parseErr);
+    c.retryInfo = null;
     c.status = 'error';
     c.error = '応答データを解析できませんでした。もう一度お試しください。';
   }
@@ -1738,11 +1750,12 @@ function render(){
         ${docsForCategory(c.regType).map(d => docSlotHTML(c,d)).join('')}
       </div>
       ${casePanelHTML(c)}
-      <div style="display:flex;align-items:center;">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
         <button class="analyze-btn" ${c.status==='analyzing'?'disabled':''} onclick="analyzeCandidate('${c.id}')">
           ${c.status==='analyzing' ? '分析中…' : '書類分析する'}
         </button>
         ${c.status==='done' ? `<span class="status-msg">分析完了</span>` : ''}
+        ${c.retryInfo ? `<span class="status-msg" style="color:var(--amber);">⏳ ${c.retryInfo}</span>` : ''}
       </div>
       ${resultHTML(c)}
     </div>
