@@ -47,6 +47,7 @@ h1{
   position:relative;
 }
 .doc-slot.filled{border-style:solid;border-color:var(--teal);background:var(--teal-soft);}
+.doc-slot.drag{border-color:var(--teal);background:var(--teal-soft);}
 .doc-label{font-weight:700;font-size:15px;margin-bottom:4px;display:block;}
 .doc-already{font-size:12px;color:var(--green);margin-bottom:8px;}
 .doc-filename{font-size:13px;color:var(--ink);word-break:break-all;margin-top:6px;}
@@ -268,12 +269,15 @@ function docSlotHTML(doc){
   const f = myFiles[doc.key];
   const alreadyThere = caseInfo.filledDocKeys.includes(doc.key) && !f;
   return `
-    <div class="doc-slot ${f ? 'filled' : ''}">
+    <div class="doc-slot ${f ? 'filled' : ''}"
+      ondragover="event.preventDefault(); event.currentTarget.classList.add('drag')"
+      ondragleave="event.currentTarget.classList.remove('drag')"
+      ondrop="onDentistDrop(event,'${doc.key}')">
       <span class="doc-label">${doc.label}</span>
       ${alreadyThere ? `<div class="doc-already">✓ すでに提出されている項目です（差し替えも可能です）</div>` : ''}
       ${f
         ? `<div class="doc-filename">📄 ${f.name}${f.pageCount>1 ? `（${f.pageCount}ページ）` : ''}</div>`
-        : `<div class="doc-empty">未添付</div>`}
+        : `<div class="doc-empty">未添付（クリックまたはドラッグ＆ドロップで添付）</div>`}
       ${f && f.syncing ? `<div class="doc-sync">⏳ 送信中…</div>` : ''}
       ${f && f.syncError ? `<div class="doc-sync err">⚠ 送信に失敗しました。もう一度お試しください。</div>` : ''}
       ${f && f.synced ? `<div class="doc-sync" style="color:var(--green);">✓ 送信完了</div>` : ''}
@@ -282,6 +286,13 @@ function docSlotHTML(doc){
         <input type="file" accept=".pdf,image/*" onchange="handleFile('${doc.key}', this.files[0])">
       </label>
     </div>`;
+}
+
+function onDentistDrop(e, docKey){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if(file) handleFile(docKey, file);
 }
 
 function render(){
