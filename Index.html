@@ -409,14 +409,18 @@ const DOC_MATRIX = {
     {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'representative', 'personInCharge', 'email', 'phone', 'fax', 'postalCode']},
     {key:'lab_homepage', label:'技工所ホームページキャプチャ', submitter:'sales', verifies:['companyName', 'address', 'phone', 'postalCode']},
     {key:'corp_number_check', label:'法人番号確認（国税庁法人番号公表サイト）', submitter:'sales', verifies:['companyName', 'address', 'licenseNumber']},
-    {key:'corp_registry', label:'全部事項証明書（法人登記）', submitter:'customer', verifies:['companyName', 'address', 'representative', 'postalCode']}
+    {key:'corp_registry', label:'全部事項証明書（法人登記）', submitter:'customer', verifies:['companyName', 'address', 'representative', 'postalCode']},
+    {key:'internet_search_address', label:'インターネット検索（所在地確認）', submitter:'sales', verifies:['companyName', 'address']},
+    {key:'remittance_slip', label:'振込用紙・請求書等（会社名・住所が記載された書類）', submitter:'both', verifies:['companyName', 'address']}
   ],
   other: [
     {key:'license_dental_or_lab', label:'歯科医師免許証／技工士免許証', submitter:'customer', verifies:['representative', 'personInCharge']},
     {key:'lab_registration', label:'技工所開設登録証', submitter:'customer', verifies:['companyName', 'address', 'phone', 'postalCode']},
     {key:'business_card', label:'名刺', submitter:'both', verifies:['companyName', 'address', 'representative', 'personInCharge', 'email', 'phone', 'fax', 'postalCode']},
     {key:'lab_homepage', label:'技工所ホームページキャプチャ', submitter:'sales', verifies:['companyName', 'address']},
-    {key:'corp_number_check', label:'法人番号確認（国税庁法人番号公表サイト）', submitter:'sales', verifies:['companyName', 'address', 'phone', 'postalCode']}
+    {key:'corp_number_check', label:'法人番号確認（国税庁法人番号公表サイト）', submitter:'sales', verifies:['companyName', 'address', 'phone', 'postalCode']},
+    {key:'internet_search_address', label:'インターネット検索（所在地確認）', submitter:'sales', verifies:['companyName', 'address']},
+    {key:'remittance_slip', label:'振込用紙・請求書等（会社名・住所が記載された書類）', submitter:'both', verifies:['companyName', 'address']}
   ]
 };
 
@@ -1316,7 +1320,7 @@ async function checkDuplicateForCandidate(id){
   render();
   try{
     const resp = await gsRun('checkDuplicateClinic', {
-      doctor: f.doctorField,
+      doctor: f.companyNameField,
       tel: f.telField,
       fax: f.faxField,
       address: f.addressField,
@@ -1841,53 +1845,58 @@ function computeCandidateFields(c){
   const ne = c.result.netra_export || {};
   const d = c.result.documents || {};
   const isBiz = c.regType !== 'individual_staff';
-  const doctorFallback = isBiz
-    ? (ne.doctor || collectFieldValue(d,'companyName') || c.name)
-    : (ne.person_name || collectFieldValue(d,'personInCharge') || collectFieldValue(d,'representative') || c.name);
-  const doctorField = isBiz
-    ? selectedFieldValue(c, FIELD_LABELS.companyName, doctorFallback)
-    : selectedFieldValue(c, FIELD_LABELS.personInCharge, doctorFallback);
+
+  const companyNameFallback = ne.doctor || collectFieldValue(d,'companyName') || (isBiz ? c.name : '');
+  const companyNameField = selectedFieldValue(c, FIELD_LABELS.companyName, companyNameFallback);
+
+  const representativeFallback = ne.person_name || collectFieldValue(d,'representative') || collectFieldValue(d,'personInCharge') || (!isBiz ? c.name : '');
+  const representativeLabel = isBiz ? FIELD_LABELS.representative : FIELD_LABELS.personInCharge;
+  const representativeField = selectedFieldValue(c, representativeLabel, representativeFallback);
+
   const telField = selectedFieldValue(c, FIELD_LABELS.phone, ne.tel_no || collectFieldValue(d,'phone') || '');
   const faxField = selectedFieldValue(c, FIELD_LABELS.fax, ne.fax_no || collectFieldValue(d,'fax') || '');
   const addressField = selectedFieldValue(c, FIELD_LABELS.address, ne.bill_to || collectFieldValue(d,'address') || '');
+  const postalCodeField = selectedFieldValue(c, FIELD_LABELS.postalCode, collectFieldValue(d,'postalCode') || '');
   const licenseField = selectedFieldValue(c, FIELD_LABELS.licenseNumber, ne.license_no || collectFieldValue(d,'licenseNumber') || '');
   const codeField = selectedFieldValue(c, '医療機関コード', institutionCodeDisplay(c.result));
+  const homepageUrlField = selectedFieldValue(c, FIELD_LABELS.homepageUrl, collectFieldValue(d,'homepageUrl') || '');
+  const managerFounderField = selectedFieldValue(c, FIELD_LABELS.managerFounder, collectFieldValue(d,'managerFounder') || '');
   // 영업이 직접 입력해서 선생님께 보낸 메일 주소가 있으면 그것을 우선 사용하고,
   // 없으면 기존처럼 명함 등에서 추출된 이메일(체크박스로 포함 동의한 경우)을 사용합니다.
   const emailField = c.dentistEmail || (c.includeEmail ? (collectFieldValue(d,'email') || ne.email || '') : '');
-  return { isBiz, doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d };
+
+  return {
+    isBiz, companyNameField, representativeField, telField, faxField, addressField,
+    postalCodeField, licenseField, codeField, homepageUrlField, managerFounderField,
+    emailField, ne, d
+  };
 }
 
 function buildExportRows(){
   const eligible = candidates.filter(c=>isEligibleForRegistration(c));
   const rows = eligible.map(c=>{
     const f = computeCandidateFields(c);
-    const { doctorField, telField, faxField, addressField, licenseField, codeField, emailField, ne, d } = f;
     return {
-      '登録種別': categoryLabel(c.regType),
-      'CODE': codeField,
-      "Doctor's Code": '',
-      'Doctor': doctorField,
       'INPUT DATE': new Date().toISOString().slice(0,10),
-      'TEL NO': telField,
-      'FAX': faxField,
-      'AREA': ne.area_sido || '',
-      'CITY': ne.city_sigungu || '',
-      'REG DATE': '',
-      'TAX RATE': '',
-      'IN-CHARGE': '',
-      'STATUS': c.result.overall_status || '',
-      'LICENSE': licenseField,
-      'SPECIALTY': ne.specialty || '歯科',
-      'NETWORK': '',
-      'E-MAIL': emailField,
-      'CELL': '',
-      '(Bill To)': addressField,
-      '(Ship To)': addressField,
-      '(確認用)HP記載メイン住所': '',
       '提出書類数': c.result.doc_count_submitted ?? '',
       '一致率(%)': c.result.match_rate ?? '',
-      '判定備考': c.result.overall_note || ''
+      'STATUS': c.result.overall_status || '',
+      '歯科区分': categoryLabel(c.regType),
+      '医院名／事業所名': f.companyNameField,
+      '郵便番号': f.postalCodeField,
+      '住所': f.addressField,
+      '代表者名': f.representativeField,
+      'メールアドレス': f.emailField,
+      'ホームページURL': f.homepageUrlField,
+      '電話番号': f.telField,
+      'FAX番号': f.faxField,
+      'CELL NO': '',
+      '医療機関 NO': f.codeField,
+      'AREA': f.ne.area_sido || '',
+      'CITY': f.ne.city_sigungu || '',
+      'LICENSE NO': f.licenseField,
+      '管理者／開設者': f.managerFounderField,
+      'caseId': c.caseId || ''
     };
   });
   return { rows, ids: eligible.map(c=>c.id) };
