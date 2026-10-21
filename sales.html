@@ -34,6 +34,8 @@ button:disabled{opacity:.5}button.ghost{background:none;color:var(--pri);border:
 </div></div>
 <script>
 const API_URL='https://script.google.com/macros/s/AKfycbxMwRQYmz7HyDBE3bjbMwNAnKHW25fPFUsTIBPKSxqAjLe4JWFmtHpZaGLY-T__yCHq/exec';
+// ★ 許可するドメイン。テスト中は gmail.com、本番は osstemjapan.com に変更（Config の allowedSalesDomain も同じ値に）
+const ALLOWED_DOMAIN='gmail.com';
 const CLIENT_ID='696950584060-7uqisvvijoq39urnr3okp3s3r5s1vhht.apps.googleusercontent.com';
 const $=id=>document.getElementById(id);
 let idToken=null;
@@ -42,13 +44,13 @@ function show(el,t,cls){el.className='msg '+cls;el.textContent=t;}
 function parseJwt(t){try{return JSON.parse(decodeURIComponent(escape(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));}catch(e){return {};}}
 function onLogin(resp){
   idToken=resp.credential;const p=parseJwt(idToken);
-  if(!/@osstemjapan\.com$/i.test(p.email||'')){show($('loginMsg'),'会社のGoogleアカウント（@osstemjapan.com）でログインしてください。','err');idToken=null;return;}
+  if(!(p.email||'').toLowerCase().endsWith('@'+ALLOWED_DOMAIN)){show($('loginMsg'),'許可されたGoogleアカウント（@'+ALLOWED_DOMAIN+'）でログインしてください。','err');idToken=null;return;}
   $('loginMsg').className='msg err hide';$('loginCard').classList.add('hide');$('formCard').classList.remove('hide');
   $('whoTxt').textContent=(p.name||'')+'（'+p.email+'）';$('salesEmail').value=p.email;
 }
 window.addEventListener('load',()=>{
   const t=setInterval(()=>{if(window.google&&google.accounts&&google.accounts.id){clearInterval(t);
-    google.accounts.id.initialize({client_id:CLIENT_ID,callback:onLogin,hd:'osstemjapan.com'});
+    google.accounts.id.initialize({client_id:CLIENT_ID,callback:onLogin,hd:ALLOWED_DOMAIN});
     google.accounts.id.renderButton($('gbtn'),{theme:'outline',size:'large',text:'signin_with'});}},200);
 });
 $('logout').onclick=()=>{idToken=null;if(window.google)google.accounts.id.disableAutoSelect();location.reload();};
