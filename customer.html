@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>お取引登録情報のご入力</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#1d2733;--sub:#5d6b7a;--pri:#0b5cad;--ok:#0a7a45;--err:#b3261e;--line:#d8dee6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;line-height:1.6}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:20px;margin:8px 0 4px}p.lead{color:var(--sub);margin:0 0 16px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
+label{display:block;font-weight:600;font-size:14px;margin:14px 0 4px}
+.req{color:var(--err);font-size:12px;margin-left:6px}.opt{color:var(--sub);font-size:12px;margin-left:6px;font-weight:400}
+input[type=text],input[type=tel],input[type=email],select{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:16px;background:#fff}
+input:focus,select:focus{outline:2px solid var(--pri);border-color:var(--pri)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:420px){.row2{grid-template-columns:1fr}}
+.hint{font-size:12px;color:var(--sub);margin:4px 0 0}
+.ev{border:1px dashed var(--line);border-radius:10px;padding:12px;margin-top:10px}
+.ev .top{display:flex;gap:8px;align-items:center}.ev img{max-width:100%;max-height:140px;margin-top:8px;border-radius:6px}
+.ev button.x{width:auto;margin:0;background:none;color:var(--err);border:1px solid var(--err);padding:8px 12px}
+button{width:100%;margin-top:18px;padding:14px;border:0;border-radius:10px;background:var(--pri);color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+button.add{background:none;color:var(--pri);border:1px solid var(--pri);margin-top:10px}
+button:disabled{opacity:.5}
+.msg{padding:12px;border-radius:8px;font-size:14px;white-space:pre-wrap;margin-top:14px}
+.msg.err{background:#fdecea;color:var(--err)}.msg.ok{background:#e6f5ec;color:var(--ok)}.msg.info{background:#eaf2fb;color:var(--pri)}
+.hide{display:none}
+</style></head><body><div class="wrap">
+<h1>お取引登録情報のご入力</h1>
+<p class="lead">オススタムジャパン　所要時間：約3分</p>
+<div id="state" class="card">読み込み中…</div>
+<form id="form" class="card hide" autocomplete="on" novalidate>
+  <div id="addl" class="msg info hide"></div>
+  <label>病院／会社名<span class="req">必須</span></label><input type="text" id="clinicName" autocomplete="organization">
+  <div class="row2"><div><label>郵便番号<span class="req">必須</span></label><input type="text" id="postalCode" inputmode="numeric" placeholder="123-4567" autocomplete="postal-code"></div><div></div></div>
+  <label>住所<span class="req">必須</span></label><input type="text" id="address" autocomplete="street-address">
+  <label>代表者名<span class="req">必須</span></label><input type="text" id="representative">
+  <label>作成者名（ご記入いただいている方）<span class="req">必須</span></label><input type="text" id="authorName" autocomplete="name">
+  <label>作成者の立場<span class="req">必須</span></label><select id="role"></select>
+  <div class="row2"><div><label>TEL<span class="req">必須</span></label><input type="tel" id="tel" autocomplete="tel"></div><div><label>FAX<span class="opt">任意</span></label><input type="tel" id="fax"></div></div>
+  <label>メールアドレス<span class="opt">任意（契約書・債権確認書のご案内に使用します）</span></label><input type="email" id="email" autocomplete="email">
+  <label>確認資料の写真<span id="evReq" class="req hide">必須</span><span id="evOpt" class="opt">任意（内容確認のため、追加でご提出をお願いすることがあります）</span></label>
+  <p class="hint">歯科医師免許証／技工士免許証／高度管理販売業許可書／臨床研修終了登録証／全部事項証明書 のいずれか。画像またはPDF。</p>
+  <div id="evList"></div>
+  <button type="button" class="add" id="addEv">＋ 資料を追加する</button>
+  <div id="err" class="msg err hide"></div>
+  <button type="submit" id="submit">送信する</button>
+</form>
+</div>
+<script>
+const API_URL='https://script.google.com/macros/s/AKfycbxMwRQYmz7HyDBE3bjbMwNAnKHW25fPFUsTIBPKSxqAjLe4JWFmtHpZaGLY-T__yCHq/exec';
+const $=id=>document.getElementById(id);
+const token=new URLSearchParams(location.search).get('t')||'';
+let cfg=null,evs=[];
+function gsRun(fn,...a){return fetch(API_URL,{method:'POST',body:JSON.stringify({fn:fn,args:a})}).then(r=>r.json()).then(d=>{if(d&&d.__error)throw new Error(d.__error);return d;});}
+function state(t,cls){const s=$('state');s.className='card msg '+(cls||'info');s.textContent=t;s.classList.remove('hide');$('form').classList.add('hide');}
+async function init(){
+  if(!token){state('リンクが正しくありません。メールのリンクからアクセスしてください。','err');return;}
+  try{
+    const r=await gsRun('getRegistrationForm',token);
+    if(!r.ok){state(r.error,'err');return;}
+    if(r.closed){state('このお手続きは完了しています。ご不明な点は担当営業へご連絡ください。','info');return;}
+    if(r.submitted){state('ご入力ありがとうございます。現在、内容を確認しております。結果は担当営業とご入力のメールアドレスへご連絡します。','ok');return;}
+    if(r.expired){state('リンクの有効期限が切れています。お手数ですが担当営業へ再送をご依頼ください。','err');return;}
+    cfg=r;
+    $('role').innerHTML='<option value="">選択してください</option>'+r.roles.map(x=>'<option value="'+x.key+'">'+x.label+'</option>').join('');
+    if(r.additionalRequestNote){$('addl').textContent='【追加のお願い】\n'+r.additionalRequestNote;$('addl').classList.remove('hide');}
+    $('state').classList.add('hide');$('form').classList.remove('hide');
+  }catch(e){state('通信エラー：'+e.message,'err');}
+}
+function needEv(){const x=cfg&&cfg.roles.find(r=>r.key===$('role').value);return !!(x&&x.evidenceRequired);}
+$('role').onchange=()=>{const n=needEv();$('evReq').classList.toggle('hide',!n);$('evOpt').classList.toggle('hide',n);};
+function resize(file){return new Promise((res,rej)=>{
+  if(file.type==='application/pdf'){const fr=new FileReader();fr.onload=()=>res({mime:file.type,dataUrl:fr.result});fr.onerror=rej;fr.readAsDataURL(file);return;}
+  const img=new Image(),u=URL.createObjectURL(file);
+  img.onload=()=>{const m=1600,k=Math.min(1,m/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);res({mime:'image/jpeg',dataUrl:c.toDataURL('image/jpeg',0.85)});};
+  img.onerror=()=>rej(new Error('画像を読み込めませんでした'));img.src=u;});}
+function renderEv(){
+  $('evList').innerHTML='';
+  evs.forEach((e,i)=>{
+    const d=document.createElement('div');d.className='ev';
+    const opts=cfg.evidenceTypes.map(t=>'<option'+(t===e.type?' selected':'')+'>'+t+'</option>').join('');
+    d.innerHTML='<div class="top"><select>'+opts+'</select><button type="button" class="x">削除</button></div>'+(e.mime==='application/pdf'?'<p class="hint">PDF を添付済み</p>':'<img alt="">');
+    if(e.mime!=='application/pdf')d.querySelector('img').src=e.dataUrl;
+    d.querySelector('select').onchange=ev=>{e.type=ev.target.value;};
+    d.querySelector('.x').onclick=()=>{evs.splice(i,1);renderEv();};
+    $('evList').appendChild(d);
+  });
+}
+$('addEv').onclick=()=>{
+  if(evs.length>=8){alert('添付は8枚までです。');return;}
+  const f=document.createElement('input');f.type='file';f.accept='image/*,application/pdf';
+  f.onchange=async()=>{if(!f.files[0])return;try{const r=await resize(f.files[0]);evs.push({type:cfg.evidenceTypes[0],mime:r.mime,dataUrl:r.dataUrl});renderEv();}catch(e){alert(e.message);}};
+  f.click();
+};
+$('form').onsubmit=async ev=>{
+  ev.preventDefault();const eb=$('err');eb.classList.add('hide');
+  const d={clinicName:$('clinicName').value,postalCode:$('postalCode').value,address:$('address').value,representative:$('representative').value,authorName:$('authorName').value,roleKey:$('role').value,tel:$('tel').value,fax:$('fax').value,email:$('email').value};
+  const miss=[];[['clinicName','病院／会社名'],['postalCode','郵便番号'],['address','住所'],['representative','代表者名'],['authorName','作成者名'],['roleKey','作成者の立場'],['tel','TEL']].forEach(([k,l])=>{if(!String(d[k]).trim())miss.push(l);});
+  if(miss.length){eb.textContent='次の項目を入力してください：'+miss.join('、');eb.classList.remove('hide');return;}
+  if(needEv()&&!evs.length){eb.textContent='この立場の場合、確認資料の写真が必須です。';eb.classList.remove('hide');return;}
+  $('submit').disabled=true;$('submit').textContent='送信中…';
+  try{
+    const files=evs.map(e=>({type:e.type,base64:e.dataUrl.split(',')[1]}));
+    const r=await gsRun('submitRegistration',token,d,files);
+    if(r.ok){state('送信が完了しました。ありがとうございます。\n内容を確認のうえ、結果をメールでご連絡いたします。','ok');window.scrollTo(0,0);return;}
+    eb.textContent=r.error||'送信に失敗しました。';eb.classList.remove('hide');
+  }catch(e){eb.textContent='通信エラー：'+e.message+'\n電波の良い場所で、もう一度お試しください。';eb.classList.remove('hide');}
+  $('submit').disabled=false;$('submit').textContent='送信する';
+};
+init();
+</script></body></html>
