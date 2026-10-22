@@ -18,6 +18,8 @@ button:disabled{opacity:.5}button.ghost{background:none;color:var(--pri);border:
 .msg.ok{background:#e6f5ec;color:var(--ok)}.msg.err{background:#fdecea;color:var(--err)}
 .who{font-size:13px;color:var(--sub);display:flex;justify-content:space-between;align-items:center}
 .who a{color:var(--pri);cursor:pointer}.hide{display:none}
+.srch{display:grid;grid-template-columns:1fr auto;gap:8px}.srch button{width:auto;margin:0;padding:0 18px}
+.res{display:block;width:100%;text-align:left;margin:8px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font-weight:400;font-size:14px}.res b{display:block}.res small{color:var(--sub)}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}.seg-i{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:12px;margin:0;font-weight:600;cursor:pointer}.seg-i input{width:auto}
 </style></head><body><div class="wrap">
 <h1>新規登録 入力依頼</h1>
@@ -27,7 +29,12 @@ button:disabled{opacity:.5}button.ghost{background:none;color:var(--pri);border:
   <div class="who"><span id="whoTxt"></span><a id="logout">ログアウト</a></div>
   <label>依頼の種類</label>
   <div class="seg"><label class="seg-i"><input type="radio" name="rtype" value="新規" checked> 新規登録</label><label class="seg-i"><input type="radio" name="rtype" value="変更"> 登録内容の変更</label></div>
-  <div id="numBox" class="hide"><label for="custNo">顧客番号（現在の登録内容の確認に使います）</label><input id="custNo" type="text" autocomplete="off" placeholder="例：K12345"></div>
+  <div id="numBox" class="hide">
+    <label for="q">お客様を探す（病院名・顧客番号・電話番号の一部）</label>
+    <div class="srch"><input id="q" type="text" autocomplete="off" placeholder="例：○○歯科／12345／03-1234"><button id="qbtn" type="button" class="ghost">検索</button></div>
+    <div id="qres"></div>
+    <label for="custNo">顧客番号</label><input id="custNo" type="text" autocomplete="off" placeholder="検索して選ぶか、直接入力（例：K12345）">
+  </div>
   <label for="salesEmail">あなたのメールアドレス（進捗・結果の受信用）</label>
   <input id="salesEmail" type="email" inputmode="email" autocomplete="email">
   <label for="custEmail">お客様のメールアドレス（送信先）</label>
@@ -44,6 +51,21 @@ const CLIENT_ID='696950584060-7uqisvvijoq39urnr3okp3s3r5s1vhht.apps.googleuserco
 const $=id=>document.getElementById(id);
 let idToken=null;
 const rtype=()=>document.querySelector('input[name=rtype]:checked').value;
+async function doSearch(){
+  const box=$('qres');box.innerHTML='';const q=$('q').value.trim();if(!q)return;
+  $('qbtn').disabled=true;box.textContent='検索中…';
+  try{
+    const r=await gsRun('searchCustomers',idToken,q);box.textContent='';
+    if(!r.ok){box.textContent=r.error||'検索に失敗しました。';return;}
+    if(!r.results.length){box.textContent='該当するお客様が見つかりません。';return;}
+    r.results.forEach(c=>{const b=document.createElement('button');b.type='button';b.className='res';
+      const n=document.createElement('b');n.textContent=c.name||'（名称なし）';const s=document.createElement('small');s.textContent=c.customerNumber+'　'+(c.address||'')+'　'+(c.tel||'');
+      b.append(n,s);b.onclick=()=>{$('custNo').value=c.customerNumber;if(c.email&&!$('custEmail').value)$('custEmail').value=c.email;box.innerHTML='';const ok=document.createElement('div');ok.className='msg ok';ok.textContent='選択：'+(c.name||'')+'（'+c.customerNumber+'）';box.appendChild(ok);};box.appendChild(b);});
+    if(r.more){const m=document.createElement('div');m.className='hint';m.textContent='ほかにも該当があります。条件を絞って検索してください。';box.appendChild(m);}
+  }catch(e){box.textContent='通信エラー：'+e.message;}
+  $('qbtn').disabled=false;
+}
+$('qbtn').onclick=doSearch;$('q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();doSearch();}});
 document.querySelectorAll('input[name=rtype]').forEach(r=>r.addEventListener('change',()=>{$('numBox').classList.toggle('hide',rtype()!=='変更');$('send').textContent=rtype()==='変更'?'お客様へ変更ページを送信する':'お客様へ送信する';}));
 function gsRun(fn,...args){return fetch(API_URL,{method:'POST',body:JSON.stringify({fn:fn,args:args})}).then(r=>r.json()).then(d=>{if(d&&d.__error)throw new Error(d.__error);return d;});}
 function show(el,t,cls){el.className='msg '+cls;el.textContent=t;}
