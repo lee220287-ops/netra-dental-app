@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>お取引登録情報のご入力</title>
 <style>
-:root{--bg:#f4f6f9;--card:#fff;--ink:#1d2733;--sub:#5d6b7a;--pri:#0b5cad;--ok:#0a7a45;--err:#b3261e;--line:#d8dee6}
+:root{--bg:#f4f6f9;--card:#fff;--ink:#1d2733;--sub:#5d6b7a;--pri:#0b5cad;--ok:#0a7a45;--err:#b3261e;--warn:#8a5a00;--line:#d8dee6}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;line-height:1.6}
 .wrap{max-width:560px;margin:0 auto;padding:20px 16px 56px}
 h1{font-size:20px;margin:8px 0 4px}p.lead{color:var(--sub);margin:0 0 16px;font-size:14px}
@@ -14,14 +14,18 @@ input[type=text],input[type=tel],input[type=email],select{width:100%;padding:12p
 input:focus,select:focus{outline:2px solid var(--pri);border-color:var(--pri)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:420px){.row2{grid-template-columns:1fr}}
 .hint{font-size:12px;color:var(--sub);margin:4px 0 0}
+.zipst{font-size:12px;margin:4px 0 0;min-height:18px}.zipst.ok{color:var(--ok)}.zipst.err{color:var(--err)}
 .ev{border:1px dashed var(--line);border-radius:10px;padding:12px;margin-top:10px}
 .ev .top{display:flex;gap:8px;align-items:center}.ev img{max-width:100%;max-height:140px;margin-top:8px;border-radius:6px}
 .ev button.x{width:auto;margin:0;background:none;color:var(--err);border:1px solid var(--err);padding:8px 12px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 button{width:100%;margin-top:18px;padding:14px;border:0;border-radius:10px;background:var(--pri);color:#fff;font-size:16px;font-weight:700;cursor:pointer}
-button.add{background:none;color:var(--pri);border:1px solid var(--pri);margin-top:10px}
+button.add{background:none;color:var(--pri);border:1px solid var(--pri);margin-top:0;padding:12px;font-size:15px}
+button.sec{background:none;color:var(--pri);border:1px solid var(--pri);margin-top:10px}
+button.link{background:none;color:var(--sub);border:0;font-weight:400;text-decoration:underline;margin-top:8px;font-size:14px}
 button:disabled{opacity:.5}
 .msg{padding:12px;border-radius:8px;font-size:14px;white-space:pre-wrap;margin-top:14px}
-.msg.err{background:#fdecea;color:var(--err)}.msg.ok{background:#e6f5ec;color:var(--ok)}.msg.info{background:#eaf2fb;color:var(--pri)}
+.msg.err{background:#fdecea;color:var(--err)}.msg.ok{background:#e6f5ec;color:var(--ok)}.msg.info{background:#eaf2fb;color:var(--pri)}.msg.warn{background:#fff4dd;color:var(--warn)}
 .hide{display:none}
 </style></head><body><div class="wrap">
 <h1>お取引登録情報のご入力</h1>
@@ -31,27 +35,42 @@ button:disabled{opacity:.5}
   <div id="addl" class="msg info hide"></div>
   <label>病院／会社名<span class="req">必須</span></label><input type="text" id="clinicName" autocomplete="organization">
   <div class="row2"><div><label>郵便番号<span class="req">必須</span></label><input type="text" id="postalCode" inputmode="numeric" placeholder="123-4567" autocomplete="postal-code"></div><div></div></div>
-  <label>住所<span class="req">必須</span></label><input type="text" id="address" autocomplete="street-address">
+  <div id="zipst" class="zipst">郵便番号を入れると、都道府県・市区町村が自動で入ります。</div>
+  <div class="row2"><div><label>都道府県<span class="req">必須</span></label><input type="text" id="prefecture"></div><div><label>市区町村・町域<span class="req">必須</span></label><input type="text" id="cityTown"></div></div>
+  <label>番地・建物名<span class="req">必須</span></label><input type="text" id="streetAddress" placeholder="例：1-2-3 ○○ビル 4F">
   <label>代表者名<span class="req">必須</span></label><input type="text" id="representative">
   <label>作成者名（ご記入いただいている方）<span class="req">必須</span></label><input type="text" id="authorName" autocomplete="name">
   <label>作成者の立場<span class="req">必須</span></label><select id="role"></select>
   <div class="row2"><div><label>TEL<span class="req">必須</span></label><input type="tel" id="tel" autocomplete="tel"></div><div><label>FAX<span class="opt">任意</span></label><input type="tel" id="fax"></div></div>
   <label>メールアドレス<span class="opt">任意（契約書・債権確認書のご案内に使用します）</span></label><input type="email" id="email" autocomplete="email">
-  <label>確認資料の写真<span id="evReq" class="req hide">必須</span><span id="evOpt" class="opt">任意（内容確認のため、追加でご提出をお願いすることがあります）</span></label>
-  <p class="hint">歯科医師免許証／技工士免許証／高度管理販売業許可書／臨床研修終了登録証／全部事項証明書 のいずれか。画像またはPDF。</p>
-  <div id="evList"></div>
-  <button type="button" class="add" id="addEv">＋ 資料を追加する</button>
+
+  <div id="evBox" class="hide">
+    <label>確認資料の写真<span id="evReq" class="req hide">必須</span><span id="evOpt" class="opt hide">ご提出をお願いします</span></label>
+    <p class="hint">歯科医師免許証／技工士免許証／高度管理販売業許可書／臨床研修終了登録証／全部事項証明書 のいずれか。スマートフォンでは、その場で撮影もできます。</p>
+    <div id="evList"></div>
+    <div class="btns"><button type="button" class="add" id="addCam">📷 写真を撮る</button><button type="button" class="add" id="addFile">📁 ファイルを選ぶ</button></div>
+  </div>
+
+  <div id="ownerNote" class="msg warn hide">代表者の方でも、ご入力内容を確認したうえで、追加の確認資料（免許証など）のご提出をお願いする場合があります。あらかじめご了承ください。</div>
   <div id="err" class="msg err hide"></div>
   <button type="submit" id="submit">送信する</button>
 </form>
+
+<div id="dupBox" class="card hide">
+  <div class="msg warn" style="margin-top:0">ご入力の内容と同じ（または非常によく似た）病院・会社が、すでに登録されている可能性があります。\nお手数ですが、すでにお取引がないかをご確認ください。\n\n下のボタンを押すと、担当営業へ確認のメールが届きます。担当より内容を確認のうえ、ご連絡いたします。</div>
+  <button type="button" id="dupMail">担当営業へ確認メールを送る</button>
+  <div id="dupMsg" class="msg ok hide"></div>
+  <button type="button" class="sec" id="dupBack">入力内容を修正する</button>
+  <button type="button" class="link" id="dupForce">重複ではないので、このまま送信する</button>
+</div>
 </div>
 <script>
 const API_URL='https://script.google.com/macros/s/AKfycbxMwRQYmz7HyDBE3bjbMwNAnKHW25fPFUsTIBPKSxqAjLe4JWFmtHpZaGLY-T__yCHq/exec';
 const $=id=>document.getElementById(id);
 const token=new URLSearchParams(location.search).get('t')||'';
-let cfg=null,evs=[];
+let cfg=null,evs=[],additional=false;
 function gsRun(fn,...a){return fetch(API_URL,{method:'POST',body:JSON.stringify({fn:fn,args:a})}).then(r=>r.json()).then(d=>{if(d&&d.__error)throw new Error(d.__error);return d;});}
-function state(t,cls){const s=$('state');s.className='card msg '+(cls||'info');s.textContent=t;s.classList.remove('hide');$('form').classList.add('hide');}
+function state(t,cls){const s=$('state');s.className='card msg '+(cls||'info');s.textContent=t;s.classList.remove('hide');$('form').classList.add('hide');$('dupBox').classList.add('hide');}
 async function init(){
   if(!token){state('リンクが正しくありません。メールのリンクからアクセスしてください。','err');return;}
   try{
@@ -60,14 +79,42 @@ async function init(){
     if(r.closed){state('このお手続きは完了しています。ご不明な点は担当営業へご連絡ください。','info');return;}
     if(r.submitted){state('ご入力ありがとうございます。現在、内容を確認しております。結果は担当営業とご入力のメールアドレスへご連絡します。','ok');return;}
     if(r.expired){state('リンクの有効期限が切れています。お手数ですが担当営業へ再送をご依頼ください。','err');return;}
-    cfg=r;
+    cfg=r;additional=(r.status==='追加要請');
     $('role').innerHTML='<option value="">選択してください</option>'+r.roles.map(x=>'<option value="'+x.key+'">'+x.label+'</option>').join('');
     if(r.additionalRequestNote){$('addl').textContent='【追加のお願い】\n'+r.additionalRequestNote;$('addl').classList.remove('hide');}
-    $('state').classList.add('hide');$('form').classList.remove('hide');
+    $('state').classList.add('hide');$('form').classList.remove('hide');updateRoleUi();
   }catch(e){state('通信エラー：'+e.message,'err');}
 }
-function needEv(){const x=cfg&&cfg.roles.find(r=>r.key===$('role').value);return !!(x&&x.evidenceRequired);}
-$('role').onchange=()=>{const n=needEv();$('evReq').classList.toggle('hide',!n);$('evOpt').classList.toggle('hide',n);};
+function curRole(){return cfg&&cfg.roles.find(r=>r.key===$('role').value);}
+function needEv(){const x=curRole();return !!(x&&x.evidenceRequired);}
+// 確認資料の欄：代表者以外の場合に表示（追加要請を受けた場合は、代表者でも表示）
+function updateRoleUi(){
+  const x=curRole();const isOwner=!!x&&!x.evidenceRequired;
+  const showEv=!!x&&(x.evidenceRequired||additional);
+  $('evBox').classList.toggle('hide',!showEv);
+  $('evReq').classList.toggle('hide',!(x&&x.evidenceRequired));
+  $('evOpt').classList.toggle('hide',!(showEv&&x&&!x.evidenceRequired));
+  $('ownerNote').classList.toggle('hide',!(isOwner&&!additional));
+}
+$('role').onchange=updateRoleUi;
+
+// 郵便番号 → 住所の自動入力
+let zipTimer=null,lastZip='';
+function zipDigits(v){return v.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/\D/g,'');}
+$('postalCode').addEventListener('input',()=>{
+  const z=zipDigits($('postalCode').value);
+  if(z.length!==7){$('zipst').className='zipst';$('zipst').textContent='郵便番号を入れると、都道府県・市区町村が自動で入ります。';return;}
+  if(z===lastZip)return;clearTimeout(zipTimer);
+  zipTimer=setTimeout(async()=>{
+    lastZip=z;$('zipst').className='zipst';$('zipst').textContent='住所を検索中…';
+    try{
+      const r=await gsRun('lookupPostalCode',z);
+      if(r.ok){$('prefecture').value=r.prefecture;$('cityTown').value=r.cityTown;$('zipst').className='zipst ok';$('zipst').textContent='住所を自動入力しました。続けて番地・建物名をご入力ください。';$('streetAddress').focus();}
+      else{lastZip='';$('zipst').className='zipst err';$('zipst').textContent=r.error||'自動入力できませんでした。手入力してください。';}
+    }catch(e){lastZip='';$('zipst').className='zipst err';$('zipst').textContent='自動入力できませんでした。手入力してください。';}
+  },300);
+});
+
 function resize(file){return new Promise((res,rej)=>{
   if(file.type==='application/pdf'){const fr=new FileReader();fr.onload=()=>res({mime:file.type,dataUrl:fr.result});fr.onerror=rej;fr.readAsDataURL(file);return;}
   const img=new Image(),u=URL.createObjectURL(file);
@@ -85,26 +132,54 @@ function renderEv(){
     $('evList').appendChild(d);
   });
 }
-$('addEv').onclick=()=>{
+function pick(camera){
   if(evs.length>=8){alert('添付は8枚までです。');return;}
-  const f=document.createElement('input');f.type='file';f.accept='image/*,application/pdf';
+  const f=document.createElement('input');f.type='file';
+  if(camera){f.accept='image/*';f.setAttribute('capture','environment');}else{f.accept='image/*,application/pdf';}
   f.onchange=async()=>{if(!f.files[0])return;try{const r=await resize(f.files[0]);evs.push({type:cfg.evidenceTypes[0],mime:r.mime,dataUrl:r.dataUrl});renderEv();}catch(e){alert(e.message);}};
   f.click();
-};
+}
+$('addCam').onclick=()=>pick(true);
+$('addFile').onclick=()=>pick(false);
+
+function formData(){return {clinicName:$('clinicName').value,postalCode:$('postalCode').value,prefecture:$('prefecture').value,cityTown:$('cityTown').value,streetAddress:$('streetAddress').value,representative:$('representative').value,authorName:$('authorName').value,roleKey:$('role').value,tel:$('tel').value,fax:$('fax').value,email:$('email').value};}
+function showErr(t){const eb=$('err');eb.textContent=t;eb.classList.remove('hide');}
+async function doSubmit(){
+  const d=formData();
+  const files=($('evBox').classList.contains('hide')?[]:evs).map(e=>({type:e.type,base64:e.dataUrl.split(',')[1]}));
+  const r=await gsRun('submitRegistration',token,d,files);
+  if(r.ok){state('送信が完了しました。ありがとうございます。\n内容を確認のうえ、結果をメールでご連絡いたします。','ok');window.scrollTo(0,0);return true;}
+  $('dupBox').classList.add('hide');$('form').classList.remove('hide');showErr(r.error||'送信に失敗しました。');return false;
+}
 $('form').onsubmit=async ev=>{
-  ev.preventDefault();const eb=$('err');eb.classList.add('hide');
-  const d={clinicName:$('clinicName').value,postalCode:$('postalCode').value,address:$('address').value,representative:$('representative').value,authorName:$('authorName').value,roleKey:$('role').value,tel:$('tel').value,fax:$('fax').value,email:$('email').value};
-  const miss=[];[['clinicName','病院／会社名'],['postalCode','郵便番号'],['address','住所'],['representative','代表者名'],['authorName','作成者名'],['roleKey','作成者の立場'],['tel','TEL']].forEach(([k,l])=>{if(!String(d[k]).trim())miss.push(l);});
-  if(miss.length){eb.textContent='次の項目を入力してください：'+miss.join('、');eb.classList.remove('hide');return;}
-  if(needEv()&&!evs.length){eb.textContent='この立場の場合、確認資料の写真が必須です。';eb.classList.remove('hide');return;}
-  $('submit').disabled=true;$('submit').textContent='送信中…';
+  ev.preventDefault();$('err').classList.add('hide');
+  const d=formData();
+  const miss=[];[['clinicName','病院／会社名'],['postalCode','郵便番号'],['prefecture','都道府県'],['cityTown','市区町村'],['streetAddress','番地・建物名'],['representative','代表者名'],['authorName','作成者名'],['roleKey','作成者の立場'],['tel','TEL']].forEach(([k,l])=>{if(!String(d[k]).trim())miss.push(l);});
+  if(miss.length){showErr('次の項目を入力してください：'+miss.join('、'));return;}
+  if(needEv()&&!evs.length){showErr('この立場の場合、確認資料の写真が必須です。');return;}
+  $('submit').disabled=true;$('submit').textContent='確認中…';
   try{
-    const files=evs.map(e=>({type:e.type,base64:e.dataUrl.split(',')[1]}));
-    const r=await gsRun('submitRegistration',token,d,files);
-    if(r.ok){state('送信が完了しました。ありがとうございます。\n内容を確認のうえ、結果をメールでご連絡いたします。','ok');window.scrollTo(0,0);return;}
-    eb.textContent=r.error||'送信に失敗しました。';eb.classList.remove('hide');
-  }catch(e){eb.textContent='通信エラー：'+e.message+'\n電波の良い場所で、もう一度お試しください。';eb.classList.remove('hide');}
+    const c=await gsRun('checkRegistrationDuplicate',token,d);
+    if(c.ok&&c.duplicate){$('form').classList.add('hide');$('dupBox').classList.remove('hide');$('dupMsg').classList.add('hide');window.scrollTo(0,0);}
+    else if(c.ok===false&&c.error){showErr(c.error);}
+    else{$('submit').textContent='送信中…';await doSubmit();}
+  }catch(e){showErr('通信エラー：'+e.message+'\n電波の良い場所で、もう一度お試しください。');}
   $('submit').disabled=false;$('submit').textContent='送信する';
+};
+$('dupMail').onclick=async()=>{
+  $('dupMail').disabled=true;
+  try{
+    const r=await gsRun('notifySalesDuplicate',token,formData());
+    const m=$('dupMsg');m.classList.remove('hide');
+    if(r.ok){m.className='msg ok';m.textContent='担当営業へメールを送信しました。担当よりご連絡いたしますので、しばらくお待ちください。';}
+    else{m.className='msg err';m.textContent=r.error||'送信に失敗しました。';$('dupMail').disabled=false;}
+  }catch(e){const m=$('dupMsg');m.className='msg err';m.textContent='通信エラー：'+e.message;m.classList.remove('hide');$('dupMail').disabled=false;}
+};
+$('dupBack').onclick=()=>{$('dupBox').classList.add('hide');$('form').classList.remove('hide');window.scrollTo(0,0);};
+$('dupForce').onclick=async()=>{
+  $('dupForce').disabled=true;
+  try{await doSubmit();}catch(e){$('dupBox').classList.add('hide');$('form').classList.remove('hide');showErr('通信エラー：'+e.message);}
+  $('dupForce').disabled=false;
 };
 init();
 </script></body></html>
