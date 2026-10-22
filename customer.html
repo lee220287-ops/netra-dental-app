@@ -28,11 +28,12 @@ button:disabled{opacity:.5}
 .msg.err{background:#fdecea;color:var(--err)}.msg.ok{background:#e6f5ec;color:var(--ok)}.msg.info{background:#eaf2fb;color:var(--pri)}.msg.warn{background:#fff4dd;color:var(--warn)}
 .hide{display:none}
 </style></head><body><div class="wrap">
-<h1>お取引登録情報のご入力</h1>
-<p class="lead">オススタムジャパン　所要時間：約3分</p>
+<h1 id="ttl">お取引登録情報のご入力</h1>
+<p class="lead" id="lead">オススタムジャパン　所要時間：約3分</p>
 <div id="state" class="card">読み込み中…</div>
 <form id="form" class="card hide" autocomplete="on" novalidate>
   <div id="addl" class="msg info hide"></div>
+  <div id="chgBox" class="msg info hide"></div>
   <label>病院／会社名<span class="req">必須</span></label><input type="text" id="clinicName" autocomplete="organization">
   <div class="row2"><div><label>郵便番号<span class="req">必須</span></label><input type="text" id="postalCode" inputmode="numeric" placeholder="123-4567" autocomplete="postal-code"></div><div></div></div>
   <div id="zipst" class="zipst">郵便番号を入れると、都道府県・市区町村が自動で入ります。</div>
@@ -43,6 +44,7 @@ button:disabled{opacity:.5}
   <label>作成者の立場<span class="req">必須</span></label><select id="role"></select>
   <div class="row2"><div><label>TEL<span class="req">必須</span></label><input type="tel" id="tel" autocomplete="tel"></div><div><label>FAX<span class="opt">任意</span></label><input type="tel" id="fax"></div></div>
   <label>メールアドレス<span class="opt">任意（契約書・債権確認書のご案内に使用します）</span></label><input type="email" id="email" autocomplete="email">
+  <div id="reasonBox" class="hide"><label>変更の理由<span class="req">必須</span></label><input type="text" id="changeReason" placeholder="例：移転のため／電話番号の変更／代表者の交代"></div>
 
   <div id="evBox" class="hide">
     <label>確認資料の写真<span id="evReq" class="req hide">必須</span><span id="evOpt" class="opt hide">ご提出をお願いします</span></label>
@@ -68,7 +70,7 @@ button:disabled{opacity:.5}
 const API_URL='https://script.google.com/macros/s/AKfycbxMwRQYmz7HyDBE3bjbMwNAnKHW25fPFUsTIBPKSxqAjLe4JWFmtHpZaGLY-T__yCHq/exec';
 const $=id=>document.getElementById(id);
 const token=new URLSearchParams(location.search).get('t')||'';
-let cfg=null,evs=[],additional=false;
+let cfg=null,evs=[],additional=false,isChange=false;
 function gsRun(fn,...a){return fetch(API_URL,{method:'POST',body:JSON.stringify({fn:fn,args:a})}).then(r=>r.json()).then(d=>{if(d&&d.__error)throw new Error(d.__error);return d;});}
 function state(t,cls){const s=$('state');s.className='card msg '+(cls||'info');s.textContent=t;s.classList.remove('hide');$('form').classList.add('hide');$('dupBox').classList.add('hide');}
 async function init(){
@@ -82,8 +84,20 @@ async function init(){
     cfg=r;additional=(r.status==='追加要請');
     $('role').innerHTML='<option value="">選択してください</option>'+r.roles.map(x=>'<option value="'+x.key+'">'+x.label+'</option>').join('');
     if(r.additionalRequestNote){$('addl').textContent='【追加のお願い】\n'+r.additionalRequestNote;$('addl').classList.remove('hide');}
+    isChange=(r.requestType==='変更');
+    if(isChange){
+      $('ttl').textContent='ご登録内容の変更';$('lead').textContent='オススタムジャパン　顧客番号：'+(r.customerNumber||'');
+      $('chgBox').textContent='【現在のご登録内容】\n'+(r.oldInfo||'')+(r.oldAddress&&!(r.prefill&&r.prefill.prefecture)?'\n（旧住所：'+r.oldAddress+'）':'')+'\n\n変更する箇所のみ、新しい内容に書き換えてください。';
+      $('chgBox').classList.remove('hide');$('reasonBox').classList.remove('hide');
+    }
+    if(r.prefill)applyPrefill(r.prefill);
     $('state').classList.add('hide');$('form').classList.remove('hide');updateRoleUi();
   }catch(e){state('通信エラー：'+e.message,'err');}
+}
+function applyPrefill(p){
+  ['clinicName','postalCode','prefecture','cityTown','streetAddress','representative','authorName','tel','fax','email','changeReason'].forEach(k=>{if(p[k]&&$(k))$(k).value=p[k];});
+  if(p.roleKey)$('role').value=p.roleKey;
+  const z=zipDigits($('postalCode').value);if(z.length===7)lastZip=z;
 }
 function curRole(){return cfg&&cfg.roles.find(r=>r.key===$('role').value);}
 function needEv(){const x=curRole();return !!(x&&x.evidenceRequired);}
@@ -142,7 +156,7 @@ function pick(camera){
 $('addCam').onclick=()=>pick(true);
 $('addFile').onclick=()=>pick(false);
 
-function formData(){return {clinicName:$('clinicName').value,postalCode:$('postalCode').value,prefecture:$('prefecture').value,cityTown:$('cityTown').value,streetAddress:$('streetAddress').value,representative:$('representative').value,authorName:$('authorName').value,roleKey:$('role').value,tel:$('tel').value,fax:$('fax').value,email:$('email').value};}
+function formData(){return {clinicName:$('clinicName').value,postalCode:$('postalCode').value,prefecture:$('prefecture').value,cityTown:$('cityTown').value,streetAddress:$('streetAddress').value,representative:$('representative').value,authorName:$('authorName').value,changeReason:$('changeReason').value,roleKey:$('role').value,tel:$('tel').value,fax:$('fax').value,email:$('email').value};}
 function showErr(t){const eb=$('err');eb.textContent=t;eb.classList.remove('hide');}
 async function doSubmit(){
   const d=formData();
@@ -155,6 +169,7 @@ $('form').onsubmit=async ev=>{
   ev.preventDefault();$('err').classList.add('hide');
   const d=formData();
   const miss=[];[['clinicName','病院／会社名'],['postalCode','郵便番号'],['prefecture','都道府県'],['cityTown','市区町村'],['streetAddress','番地・建物名'],['representative','代表者名'],['authorName','作成者名'],['roleKey','作成者の立場'],['tel','TEL']].forEach(([k,l])=>{if(!String(d[k]).trim())miss.push(l);});
+  if(isChange&&!String(d.changeReason).trim())miss.push('変更の理由');
   if(miss.length){showErr('次の項目を入力してください：'+miss.join('、'));return;}
   if(needEv()&&!evs.length){showErr('この立場の場合、確認資料の写真が必須です。');return;}
   $('submit').disabled=true;$('submit').textContent='確認中…';

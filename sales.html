@@ -18,12 +18,16 @@ button:disabled{opacity:.5}button.ghost{background:none;color:var(--pri);border:
 .msg.ok{background:#e6f5ec;color:var(--ok)}.msg.err{background:#fdecea;color:var(--err)}
 .who{font-size:13px;color:var(--sub);display:flex;justify-content:space-between;align-items:center}
 .who a{color:var(--pri);cursor:pointer}.hide{display:none}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}.seg-i{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:12px;margin:0;font-weight:600;cursor:pointer}.seg-i input{width:auto}
 </style></head><body><div class="wrap">
 <h1>新規登録 入力依頼</h1>
 <p class="lead">お客様のメールアドレスを入力して送信すると、お客様専用の入力ページがメールで届きます。</p>
 <div id="loginCard" class="card"><p style="margin-top:0">会社のGoogleアカウント（@osstemjapan.com）でログインしてください。</p><div id="gbtn"></div><div id="loginMsg" class="msg err hide"></div></div>
 <div id="formCard" class="card hide">
   <div class="who"><span id="whoTxt"></span><a id="logout">ログアウト</a></div>
+  <label>依頼の種類</label>
+  <div class="seg"><label class="seg-i"><input type="radio" name="rtype" value="新規" checked> 新規登録</label><label class="seg-i"><input type="radio" name="rtype" value="変更"> 登録内容の変更</label></div>
+  <div id="numBox" class="hide"><label for="custNo">顧客番号（現在の登録内容の確認に使います）</label><input id="custNo" type="text" autocomplete="off" placeholder="例：K12345"></div>
   <label for="salesEmail">あなたのメールアドレス（進捗・結果の受信用）</label>
   <input id="salesEmail" type="email" inputmode="email" autocomplete="email">
   <label for="custEmail">お客様のメールアドレス（送信先）</label>
@@ -39,6 +43,8 @@ const ALLOWED_DOMAIN='gmail.com';
 const CLIENT_ID='696950584060-7uqisvvijoq39urnr3okp3s3r5s1vhht.apps.googleusercontent.com';
 const $=id=>document.getElementById(id);
 let idToken=null;
+const rtype=()=>document.querySelector('input[name=rtype]:checked').value;
+document.querySelectorAll('input[name=rtype]').forEach(r=>r.addEventListener('change',()=>{$('numBox').classList.toggle('hide',rtype()!=='変更');$('send').textContent=rtype()==='変更'?'お客様へ変更ページを送信する':'お客様へ送信する';}));
 function gsRun(fn,...args){return fetch(API_URL,{method:'POST',body:JSON.stringify({fn:fn,args:args})}).then(r=>r.json()).then(d=>{if(d&&d.__error)throw new Error(d.__error);return d;});}
 function show(el,t,cls){el.className='msg '+cls;el.textContent=t;}
 function parseJwt(t){try{return JSON.parse(decodeURIComponent(escape(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));}catch(e){return {};}}
@@ -57,15 +63,17 @@ $('logout').onclick=()=>{idToken=null;if(window.google)google.accounts.id.disabl
 $('send').onclick=async()=>{
   const m=$('msg');m.className='msg hide';
   const s=$('salesEmail').value.trim(),c=$('custEmail').value.trim();
+  const t=rtype(),no=$('custNo').value.trim();
   if(!c){show(m,'お客様のメールアドレスを入力してください。','err');return;}
-  if(!confirm('次のお客様へ送信します。よろしいですか？\n\n'+c)){return;}
+  if(t==='変更'&&!no){show(m,'顧客番号を入力してください。','err');return;}
+  if(!confirm((t==='変更'?'【登録内容の変更】顧客番号 '+no+'\n':'')+'次のお客様へ送信します。よろしいですか？\n\n'+c)){return;}
   $('send').disabled=true;$('send').textContent='送信中…';
   try{
-    const r=await gsRun('createRegistrationInvite',idToken,s,c);
-    if(r.ok){show(m,'送信しました。（受付番号：'+r.registrationId+'）\nお客様が入力を完了すると、'+s+' に進捗メールが届きます。','ok');$('again').classList.remove('hide');$('custEmail').value='';}
+    const r=await gsRun('createRegistrationInvite',idToken,s,c,t,no);
+    if(r.ok){show(m,'送信しました。（受付番号：'+r.registrationId+'）\nお客様が入力を完了すると、'+s+' に進捗メールが届きます。','ok');$('again').classList.remove('hide');$('custEmail').value='';$('custNo').value='';}
     else{show(m,r.error||'送信に失敗しました。','err');if(/トークン|ログイン/.test(r.error||''))m.textContent+='\n（一度ログアウトして、もう一度ログインしてください）';}
   }catch(e){show(m,'通信エラー：'+e.message,'err');}
-  $('send').disabled=false;$('send').textContent='お客様へ送信する';
+  $('send').disabled=false;$('send').textContent=rtype()==='変更'?'お客様へ変更ページを送信する':'お客様へ送信する';
 };
 $('again').onclick=()=>{$('msg').className='msg hide';$('again').classList.add('hide');$('custEmail').focus();};
 </script></body></html>
